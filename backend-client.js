@@ -3,7 +3,7 @@ import {
   buildFcnAnalysis,
   parseIndicativeSpot,
   spotStorageKey
-} from "./market-analysis.mjs";
+} from "./market-analysis.mjs?v=dac-analysis-v1";
 // The specifier must stay byte-identical to the one app.js uses: a different query string is a
 // different module URL, so the browser would download and instantiate this module a second time,
 // and a version bump would only bust one of the two copies.
@@ -11,7 +11,7 @@ import {
   MARKET_RESOURCE_CONSENT_KEY,
   marketResourceDescriptor,
   tradingViewWidgetUrl
-} from "./market-resources.mjs?v=market-hotlist-v3";
+} from "./market-resources.mjs?v=market-hotlist-v4";
 
 (() => {
   "use strict";
@@ -64,7 +64,7 @@ import {
     <main id="backendAnalysisView" class="backend-analysis-view" hidden>
       <section class="backend-analysis-shell">
         <header class="backend-analysis-header">
-          <div><p class="eyebrow">FCN MARKET &amp; RISK</p><h1>市場與風險分析</h1></div>
+          <div><p class="eyebrow">FCN / DAC MARKET &amp; RISK</p><h1>市場與風險分析</h1></div>
           <a id="backendAnalysisBack" class="secondary backend-analysis-back" href="./">返回詢價結果</a>
         </header>
         <p class="backend-analysis-lead">以正式排名中的單一發行機構報價為基礎，搭配前一交易日收盤價或您手動輸入的參考現價做試算。</p>
@@ -94,6 +94,14 @@ import {
     <dialog id="backendProgress" class="backend-dialog backend-results-dialog">
       <section class="backend-panel">
         <div class="backend-results-heading"><div><p class="eyebrow">AUTOMATED RFQ</p><h2>詢價進度與比價結果</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="backendFinalizeNow" type="button" class="secondary" hidden>提早結束並比價</button><button id="backendRecalculate" type="button" class="secondary" hidden>納入晚到報價重新排名</button><button id="backendBackToRfqs" type="button" class="secondary">我的詢價</button><button id="closeBackendProgress" type="button" class="secondary">返回輸入</button></div></div>
+        <section id="backendFinalizeConfirm" class="backend-finalize-confirm" role="alertdialog" aria-labelledby="backendFinalizeConfirmTitle" hidden>
+          <strong id="backendFinalizeConfirmTitle">確認提前結束詢價</strong>
+          <p id="backendFinalizeConfirmMessage"></p>
+          <div class="dialog-actions">
+            <button id="backendFinalizeCancel" type="button" class="secondary">繼續等待</button>
+            <button id="backendFinalizeConfirmAction" type="button" class="primary">確認提前結束並比價</button>
+          </div>
+        </section>
         <p id="backendCountdown" class="backend-countdown"></p>
         <div id="backendIssuerStates" class="backend-issuer-grid"></div>
         <div id="backendRankings" class="backend-rankings"></div>
@@ -187,6 +195,10 @@ import {
   const authDialog = document.querySelector("#backendAuth");
   const progressDialog = document.querySelector("#backendProgress");
   const finalizeButton = document.querySelector("#backendFinalizeNow");
+  const finalizeConfirmPanel = document.querySelector("#backendFinalizeConfirm");
+  const finalizeConfirmMessage = document.querySelector("#backendFinalizeConfirmMessage");
+  const finalizeCancelButton = document.querySelector("#backendFinalizeCancel");
+  const finalizeConfirmAction = document.querySelector("#backendFinalizeConfirmAction");
   const recalculateButton = document.querySelector("#backendRecalculate");
   const issuerPickerDialog = document.querySelector("#backendIssuerPicker");
   const issuerPickerForm = document.querySelector("#backendIssuerPickerForm");
@@ -207,7 +219,6 @@ import {
   const userbar = document.querySelector(".backend-userbar");
   const mobileActionsToggle = document.querySelector("#backendMobileActionsToggle");
   const mobileActionsLabel = document.querySelector("#backendMobileActionsLabel");
-  const mobileUserbarMedia = matchMedia("(max-width: 760px)");
   const adminRegistrationsButton = document.querySelector("#backendAdminRegistrations");
   const adminRegistrationReviewDialog = document.querySelector("#backendRegistrationReview");
   const adminRegistrationReviewList = document.querySelector("#backendRegistrationReviewList");
@@ -242,8 +253,10 @@ import {
   const analysisError = document.querySelector("#backendAnalysisError");
   const analysisBack = document.querySelector("#backendAnalysisBack");
 
+  // Named "mobile" for historical reasons: the collapse was mobile-only until it was extended to
+  // every width. Collapsed leaves 我的詢價 and the toggle visible; everything else is hidden.
   function setMobileActionsExpanded(expanded) {
-    const next = Boolean(expanded && mobileUserbarMedia.matches && state.user);
+    const next = Boolean(expanded && state.user);
     userbar.classList.toggle("is-expanded", next);
     mobileActionsToggle.setAttribute("aria-expanded", String(next));
     mobileActionsToggle.setAttribute("aria-label", next ? "收合其他操作" : "展開其他操作");
@@ -442,6 +455,11 @@ import {
     });
   }
 
+  function isDacAnalysisProduct(product) {
+    const normalized = String(product ?? "").normalize("NFKC").trim().replace(/\s+/gu, " ").toUpperCase();
+    return ["DAC", "DRA", "WRA", "RANGE ACCRUAL"].includes(normalized);
+  }
+
   function renderAnalysisCalculation() {
     const input = state.analysisInput;
     const container = document.querySelector("#backendAnalysisCalculation");
@@ -475,13 +493,21 @@ import {
         <td>${projected || "請先輸入參考現價"}</td>
         <td>${escapeHtml(row.koAssessment)}</td>
         <td>${escapeHtml(row.kiAssessment)}</td>
+        ${analysis.dacAccrualCondition ? `<td>${escapeHtml(row.accrualAssessment)}</td>` : ""}
         <td>${escapeHtml(row.outcome)}</td>
       </tr>`;
     }).join("");
+    const dacNotice = analysis.dacAccrualCondition
+      ? `<aside class="backend-analysis-product-warning" role="note">
+          <strong>DAC／DRA 保息期後利息條件</strong>
+          <p>${escapeHtml(analysis.dacAccrualCondition.description)}</p>
+        </aside>`
+      : "";
     const aki = analysis.akiBranches.length
       ? `<section class="backend-analysis-paths"><h2>AKI 路徑分流</h2><div>${analysis.akiBranches.map(branch => `<article><h3>${escapeHtml(branch.title)}</h3><p>${escapeHtml(branch.description)}</p></article>`).join("")}</div></section>`
       : "";
     container.innerHTML = `
+      ${dacNotice}
       <section class="backend-analysis-section">
         <div class="backend-analysis-section-heading"><div><p class="eyebrow">REFERENCE LEVELS</p><h2>依參考現價換算的試算價位</h2></div>
           <div class="backend-analysis-metrics"><span>KO 所需變動 <b>${percentText(analysis.metrics.koRequiredMovePct)}</b></span><span>KI 緩衝 <b>${percentText(analysis.metrics.kiBufferPct)}</b></span></div>
@@ -491,7 +517,7 @@ import {
       <section class="backend-analysis-section">
         <p class="eyebrow">WORST-OF SCENARIOS</p><h2>最弱標的情境表</h2>
         <p class="backend-analysis-note">情境以目前參考現價為 100，並假設所有標的同步變動；多標的判斷採最弱標的，不取平均。</p>
-        <div class="backend-analysis-table-wrap"><table><thead><tr><th>情境變動</th><th>最弱標的指數</th><th>試算價格</th><th>KO 判斷</th><th>KI／路徑判斷</th><th>方向性說明</th></tr></thead><tbody>${scenarioRows}</tbody></table></div>
+        <div class="backend-analysis-table-wrap"><table><thead><tr><th>情境變動</th><th>最弱標的指數</th><th>試算價格</th><th>KO 判斷</th><th>KI／路徑判斷</th>${analysis.dacAccrualCondition ? "<th>保息期後利息</th>" : ""}<th>方向性說明</th></tr></thead><tbody>${scenarioRows}</tbody></table></div>
       </section>
       ${aki}
       <p class="backend-analysis-disclaimer">${escapeHtml(analysis.disclaimer)}</p>`;
@@ -829,7 +855,7 @@ import {
           <span>KO Barrier<b>${percentText(input.terms.koBarrierPct)}</b><small>${escapeHtml(input.terms.koType)}</small></span>
           <span>KI Barrier<b>${input.terms.barrierType === "NONE" ? "不適用" : percentText(input.terms.kiBarrierPct)}</b><small>${escapeHtml(input.terms.barrierType)}</small></span>
           <span>Guaranteed Period<b>${escapeHtml(input.terms.guaranteedPeriodsMonths)} 個月</b></span>
-          <span>Note Price<b>${percentText(input.terms.upfrontOrNotePricePct)}</b></span>
+          <span class="backend-analysis-underlyings-term">連結標的<b>${escapeHtml(input.terms.underlyings.join(" / "))}</b></span>
           <span>報價時間<b>${escapeHtml(formatDateTime(input.quote.receivedAt))}</b></span>
         </div>
       </section>
@@ -975,6 +1001,7 @@ import {
     state.artifactByQuote = {};
     state.customFifthSelections = {};
     state.inMailGrace = false;
+    hideFinalizeConfirmation();
     if (rfqHistoryDialog.open) rfqHistoryDialog.close();
     state.rfqId = rfqId;
     state.hasRankings = false;
@@ -998,6 +1025,7 @@ import {
     state.artifactByQuote = {};
     state.customFifthSelections = {};
     state.inMailGrace = false;
+    hideFinalizeConfirmation();
     if (progressDialog.open) progressDialog.close();
     if (updateUrl) updateRfqUrl(null);
     void refreshRfqBadge();
@@ -1441,6 +1469,7 @@ import {
     // Open the progress dialog immediately so the user gets instant feedback while the
     // create/validate/send round trips run, instead of a frozen button.
     if (!progressDialog.open) progressDialog.showModal();
+    hideFinalizeConfirmation();
     document.querySelector("#backendCountdown").textContent = "正在建立並寄送詢價…";
     document.querySelector("#backendIssuerStates").innerHTML = "";
     document.querySelector("#backendRankings").innerHTML = "";
@@ -1484,6 +1513,21 @@ import {
     }
   }
 
+  function hideFinalizeConfirmation({ focusTrigger = false } = {}) {
+    finalizeConfirmPanel.hidden = true;
+    finalizeConfirmMessage.textContent = "";
+    if (focusTrigger && !finalizeButton.hidden) finalizeButton.focus();
+  }
+
+  function showFinalizeConfirmation() {
+    const pending = state.pendingIssuers.length
+      ? `尚待回覆：${state.pendingIssuers.join("、")}。`
+      : "目前沒有仍在等待的發行機構狀態。";
+    finalizeConfirmMessage.textContent = `系統會立即以目前已收到的有效報價完成排名；之後才抵達的報價不會自動改寫本次結果。${pending}`;
+    finalizeConfirmPanel.hidden = false;
+    finalizeConfirmAction.focus();
+  }
+
   function renderStatus(payload) {
     const deadline = payload.rfq.deadlineAt ? Date.parse(payload.rfq.deadlineAt) : null;
     const softDeadline = payload.rfq.softDeadlineAt ? Date.parse(payload.rfq.softDeadlineAt) : null;
@@ -1517,6 +1561,7 @@ import {
     document.querySelector("#backendIssuerStates").innerHTML = payload.issuers.map(item => `<span class="issuer-state status-${item.status.toLowerCase()}"><b>${item.issuer}</b>${item.status}</span>`).join("");
     // Do not offer an early close during the final transport grace period.
     finalizeButton.hidden = !["WAITING", "PARTIAL"].includes(payload.rfq.workflowStatus) || inMailGrace;
+    if (finalizeButton.hidden) hideFinalizeConfirmation();
     recalculateButton.hidden = !["COMPLETED", "NO_VALID_QUOTE"].includes(payload.rfq.workflowStatus)
       || !payload.rfq.hasUnrankedLateReplies;
     updateProvisionalBanner();
@@ -1577,7 +1622,8 @@ import {
   }
 
   function analysisLinkHtml(trade, quoteId, provisional) {
-    if (provisional || trade.product !== "FCN" || !state.rfqId) return "";
+    const product = String(trade.product ?? "").normalize("NFKC").trim().replace(/\s+/gu, " ").toUpperCase();
+    if (provisional || (product !== "FCN" && !isDacAnalysisProduct(product)) || !state.rfqId) return "";
     return ` <a class="analysis-link" href="${escapeHtml(analysisUrl(state.rfqId, trade.tradeCode, quoteId))}" target="_blank" rel="noopener">市場與風險分析</a>`;
   }
 
@@ -2094,7 +2140,7 @@ import {
     setMobileActionsExpanded(mobileActionsToggle.getAttribute("aria-expanded") !== "true");
   });
   userbar.addEventListener("click", event => {
-    if (!mobileUserbarMedia.matches || event.target.closest("#backendMobileActionsToggle")) return;
+    if (event.target.closest("#backendMobileActionsToggle")) return;
     if (event.target.closest("button")) setMobileActionsExpanded(false);
   });
   document.addEventListener("click", event => {
@@ -2108,9 +2154,9 @@ import {
       mobileActionsToggle.focus();
     }
   });
-  addEventListener("resize", () => {
-    if (!mobileUserbarMedia.matches) setMobileActionsExpanded(false);
-  }, { passive: true });
+  // The resize listener that used to force-collapse above 760px is gone: it existed to restore the
+  // always-expanded desktop bar, and with the collapse universal it would close the panel on any
+  // desktop resize instead.
   newRfqButton.addEventListener("click", () => {
     if (rfqHistoryDialog.open) rfqHistoryDialog.close();
     closeRfqProgress();
@@ -2147,20 +2193,39 @@ import {
     event.preventDefault();
     closeRfqProgress();
   });
-  finalizeButton.addEventListener("click", async () => {
+  finalizeButton.addEventListener("click", () => {
     if (!state.rfqId) return;
-    const pending = state.pendingIssuers.length ? ` 尚未回覆：${state.pendingIssuers.join("、")}。` : "";
-    if (!window.confirm(`確定要提早結束詢價並立即比價嗎？尚未回覆的發行機構將不列入本次排名。${pending}`)) return;
+    showFinalizeConfirmation();
+  });
+  finalizeCancelButton.addEventListener("click", () => hideFinalizeConfirmation({ focusTrigger: true }));
+  finalizeConfirmAction.addEventListener("click", async () => {
+    const rfqId = state.rfqId;
+    if (!rfqId) { hideFinalizeConfirmation(); return; }
     finalizeButton.disabled = true;
+    finalizeCancelButton.disabled = true;
+    finalizeConfirmAction.disabled = true;
+    document.querySelector("#backendCountdown").textContent = "正在送出提前結束要求…";
     try {
-      await request(`/rfqs/${state.rfqId}/finalize`, { method: "POST", body: "{}" });
+      await request(`/rfqs/${rfqId}/finalize`, { method: "POST", body: "{}" });
+      if (state.rfqId !== rfqId) return;
+      hideFinalizeConfirmation();
       finalizeButton.hidden = true;
+      state.snapshotVersion = null;
       document.querySelector("#backendCountdown").textContent = "已要求提早結束，正在比價…";
       await refreshResults();
     } catch (error) {
-      document.querySelector("#backendCountdown").textContent = error.message;
+      if (state.rfqId === rfqId) {
+        hideFinalizeConfirmation();
+        document.querySelector("#backendCountdown").textContent = error.message;
+        if (["RFQ_NOT_WAITING", "RFQ_MAIL_GRACE_ACTIVE"].includes(error.code)) {
+          state.snapshotVersion = null;
+          await refreshResults();
+        }
+      }
     } finally {
       finalizeButton.disabled = false;
+      finalizeCancelButton.disabled = false;
+      finalizeConfirmAction.disabled = false;
     }
   });
   recalculateButton.addEventListener("click", async () => {
