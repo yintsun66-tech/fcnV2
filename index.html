@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0b4a6f" />
     <title>FCN / DAC 詢價條件</title>
-    <link rel="stylesheet" href="./styles.css?v=earnings-v1" />
+    <link rel="stylesheet" href="./styles.css?v=dark-dialogs-v1" />
     <link
       id="darkSheet"
       rel="stylesheet"
-      href="./styles-dark.css?v=earnings-v1"
+      href="./styles-dark.css?v=dark-dialogs-v1"
       media="(prefers-color-scheme: dark)"
     />
     <script>
@@ -64,6 +64,12 @@
         <button id="generateQuoteImage" type="button" class="quote-image-button">產出報價圖</button>
         <a class="secondary guide-link" href="./follow-board.html">跟單專區</a>
         <a class="secondary guide-link" href="./guide.html" target="_blank" rel="noopener">使用說明</a>
+      </section>
+
+      <section id="staticIdentityNotice" class="notice" hidden aria-label="靜態版詢價身分">
+        <strong>詢價身分：</strong><span id="staticIdentitySummary"></span>
+        <button id="editStaticIdentity" type="button" class="link-button">修改</button>
+        <span>（只儲存在此瀏覽器，僅供郵件與報價圖追蹤，不代表登入驗證）</span>
       </section>
 
       <p id="status" class="status" role="status" aria-live="polite"></p>
@@ -181,6 +187,21 @@
       </div>
     </dialog>
 
+    <dialog id="staticIdentityDialog" class="issuer-dialog">
+      <form id="staticIdentityForm" class="dialog-content email-compose-actions">
+        <h2>輸入靜態版詢價身分</h2>
+        <p>首次詢價前請先填寫；之後可在頁面上修改。資料只會儲存在這台裝置的瀏覽器。</p>
+        <label for="staticBranchName">分行名稱</label>
+        <input id="staticBranchName" name="branchName" autocomplete="organization" maxlength="30" placeholder="例如：營業部或信義分行" required />
+        <label for="staticEmployeeNumber">五碼行編</label>
+        <input id="staticEmployeeNumber" name="employeeNumber" inputmode="numeric" autocomplete="off" pattern="[0-9]{5}" minlength="5" maxlength="5" placeholder="例如：14053" required />
+        <p id="staticIdentityError" class="email-clipboard-status" data-state="error" hidden aria-live="polite"></p>
+        <div class="dialog-actions">
+          <button type="submit" class="primary">儲存並開始詢價</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="issuerDialog" class="issuer-dialog">
       <form id="issuerForm" class="dialog-content">
         <h2>選擇發行機構</h2>
@@ -253,9 +274,9 @@
     </dialog>
 
     <script src="./vendor/html2canvas-1.4.1.min.js" defer></script>
-    <script type="module" src="./app.js?v=earnings-v3"></script>
+    <script type="module" src="./app.js?v=static-requester-v1"></script>
     <script type="module" src="./earnings-advisory.mjs?v=earnings-v4"></script>
-    <script type="module" src="./backend-client.js?v=earnings-v3"></script>
+    <script type="module" src="./backend-client.js?v=account-recovery-v1"></script>
     <script>
       /* Picker wiring. Touches nothing but the stylesheet's media attribute, the root dataset and
          one localStorage key, so no path through the quoting flow can be affected. */
