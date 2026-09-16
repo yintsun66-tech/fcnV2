@@ -14,10 +14,21 @@
   --line: #d8d8dd;
   --soft: #f2f2f7;
   --paper: #ffffff;
-  --r-control: 10px; --r-card: 14px; --r-sheet: 20px;
+  --r-control: 10px; --r-card: 14px; --r-sheet: 20px; --r-pill: 999px;
   --shadow-1: 0 1px 2px #0000000d, 0 1px 3px #0000000a;
   --shadow-2: 0 4px 12px #0000000f, 0 1px 3px #0000000a;
   --ease: cubic-bezier(.32,.72,0,1);
+  /* Same text-style set as styles.css. This page does not load styles.css, so the tokens have to
+     be declared again here rather than inherited. Keep the two lists identical.
+     The `.download-*` rules further down are html2canvas render targets and deliberately keep
+     their literal px sizes — a delivered PNG must not change because the interface did. */
+  --text-largetitle: 2.125rem;  --text-title:    1.75rem;   --text-title2:  1.375rem;
+  --text-title3:     1.25rem;   --text-headline: 1.0625rem; --text-body:    1.0625rem;
+  --text-callout:    1rem;      --text-subheadline: .9375rem;
+  --text-footnote:   .8125rem;  --text-caption:  .75rem;    --text-caption2:.6875rem;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-7: 32px; --sp-8: 40px;
+  --tap-min: 44px;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
                "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
@@ -44,7 +55,7 @@ button, .back-link {
   text-decoration: none;
   transition: background .2s var(--ease), transform .12s var(--ease);
 }
-button:hover { background: var(--accent-strong); }
+@media (hover:hover) and (pointer:fine){button:hover{ background: var(--accent-strong); }}
 button:active, .back-link:active { transform: scale(.97); }
 button:disabled { cursor: wait; opacity: .5; }
 button.secondary, .back-link {
@@ -55,7 +66,7 @@ button.secondary, .back-link {
   background: var(--accent-soft);
   color: var(--accent-strong);
 }
-button.secondary:hover, .back-link:hover { background: #d6ecee; }
+@media (hover:hover) and (pointer:fine){button.secondary:hover, .back-link:hover{ background: #d6ecee; }}
 :where(button, a, input, select):focus-visible {
   outline: 2.5px solid var(--accent); outline-offset: 2px; border-radius: var(--r-control);
 }
@@ -78,7 +89,7 @@ button.secondary:hover, .back-link:hover { background: #d6ecee; }
 }
 .follow-hero h1 { margin: 5px 0 8px; font-size: clamp(30px, 5vw, 48px); font-weight: 700; letter-spacing: -.02em; line-height: 1.12; }
 .follow-hero p { margin: 0; color: #fff; }
-.eyebrow { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.eyebrow{ margin: 0; font-size:var(--text-caption2); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .follow-hero .eyebrow { color: #fff; }
 .pin-gate { display: grid; place-items: center; padding: 54px 0; }
 .pin-gate form {
@@ -135,7 +146,7 @@ input:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3.5px #
 .product-card-frame .download-card { transform-origin: top left; }
 .product-tile-controls { max-width: 720px; margin: 0 auto; }
 .expiry-note { margin: 14px 0 0; color: var(--muted); font-weight: 800; }
-.sales-fee-note { margin: 6px 0 0; color: var(--theme-primary, #075985); font-size: 19px; font-weight: 900; }
+.sales-fee-note{ margin: 6px 0 0; color: var(--theme-primary, #075985); font-size:var(--text-title3); font-weight: 900; }
 .tile-actions { display: flex; gap: 8px; margin-top: 18px; }
 .tile-actions button { flex: 1; }
 .product-preview-mode .daily-panel,
@@ -242,11 +253,11 @@ th { background: #eaf5f5; color: #245a6c; }
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   box-shadow: 0 1px 3px #0000001f;
 }
-.follow-hero .back-link::before { content: "‹"; font-size: 1.25em; line-height: 1; margin-top: -2px; }
-.follow-hero .back-link:hover { background: #eaf6f7; color: #06626e; }
+.follow-hero .back-link::before{ content: "‹"; font-size:var(--text-title3); line-height: 1; margin-top: -2px; }
+@media (hover:hover) and (pointer:fine){.follow-hero .back-link:hover{ background: #eaf6f7; color: #06626e; }}
 .follow-hero .back-link:focus-visible { outline: 2.5px solid #fff; outline-offset: 3px; }
 
 @media (max-width: 760px) {
   /* Matches the quote page: 11px uppercase is below the readable floor on a phone. */
-  .eyebrow { font-size: 12px; }
+  .eyebrow{ font-size:var(--text-caption); }
 }

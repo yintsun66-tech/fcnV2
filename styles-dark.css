@@ -29,6 +29,7 @@
 .guide-section, .backend-archive-preview, .backend-market-links article,
 .backend-market-idea-card, .backend-market-consent, .hotlist-consent,
 .backend-registration-list, .backend-accounts-list, .backend-archive-list,
+.backend-lifecycle-filters,
 .hotlist-panel > details, .backend-market-resources, .backend-analysis-paths article,
 .quote-preview-panel, .table-card, .backend-artifact-viewer, .backend-health-panel,
 .backend-analysis-spot-card, .backend-rfq-empty, .trade-navigator, .backend-userbar {
@@ -48,9 +49,12 @@
 .backend-health-grid strong, .backend-analysis-terms b, .backend-market-context-card dd,
 .backend-rfq-card header strong, .backend-rfq-underlyings { color: var(--label); }
 .notice, .backend-analysis-note, .guide-intro, .hotlist-note { color: var(--label-2); }
+.market-holiday-alert { background: linear-gradient(135deg, #3b2508, #241b0d); border-color: #f0a43a; color: #fff4dd; }
+.market-holiday-heading .eyebrow { color: #ffc46b; }
 
 /* Inputs: dark field, light text, same focus ring hue. */
 #quoteTable input, #quoteTable select, .backend-panel input, .issuer-dialog select,
+.backend-lifecycle-filters select,
 .backend-analysis-spot-card input, .backend-account-lookup input, .hotlist-controls select,
 .backend-market-controls select, .backend-artifact-toolbar select, .custom-fifth-row select,
 .backend-analysis-hero select {
@@ -67,7 +71,7 @@
 #quoteTable td.group-underlying { background: #35b8920d; }
 #quoteTable td.group-payoff { background: #3ab3c40d; }
 #quoteTable td.group-risk { background: #6fa8b00d; }
-#quoteTable tbody tr:hover td:not(.row-number) { background: #ffffff0f; }
+@media (hover:hover) and (pointer:fine){#quoteTable tbody tr:hover td:not(.row-number){ background: #ffffff0f; }}
 
 /* Chips, pills and helper blocks. */
 .field-group-legend span, .backend-rfq-meta span, .backend-timeline-metrics span,
@@ -85,6 +89,9 @@
 .backend-analysis-table-wrap th, .backend-analysis-table-wrap td { border-color: var(--separator-solid); }
 .guide-table td:first-child { background: var(--bg-inset); }
 .backend-analysis-table-wrap tbody tr:nth-child(even) { background: #ffffff08; }
+.backend-lifecycle-table tr.backend-lifecycle-expired > td { background: #6b3b203d !important; color: #ffd4b3; }
+.backend-lifecycle-table tr.backend-lifecycle-expired-maturity > td { background: #52647442 !important; color: #dce8f0; }
+.backend-lifecycle-status-expire { background: #f08a4b33; color: #ffbd8f; }
 
 /* ---- Pinned light: rasterised into a PNG a client receives. ---- */
 .quote-sheet, .quote-sheet * { color-scheme: light; }
@@ -106,12 +113,12 @@
    does, giving ~6.4:1. Tinted and plain controls already pass and keep the light accent. */
 .primary, .quote-image-button, dialog button.primary, .dialog-actions button.primary,
 .follow-hero + * .primary { color: #08262b; }
-.primary:hover, dialog button.primary:hover { background: var(--accent-strong); color: #08262b; }
-.quote-image-button:hover { background: #6fc3e0; color: #08262b; }
+@media (hover:hover) and (pointer:fine){.primary:hover, dialog button.primary:hover{ background: var(--accent-strong); color: #08262b; }}
+@media (hover:hover) and (pointer:fine){.quote-image-button:hover{ background: #6fc3e0; color: #08262b; }}
 .manual-email-button { background: #4aa8d022; color: #7cc7e6; }
-.manual-email-button:hover { background: #4aa8d033; }
+@media (hover:hover) and (pointer:fine){.manual-email-button:hover{ background: #4aa8d033; }}
 .danger { background: #ff696117; color: #ff8b85; }
-.danger:hover { background: #ff696126; }
+@media (hover:hover) and (pointer:fine){.danger:hover{ background: #ff696126; }}
 #quoteTable .row-number { background: var(--accent); color: #08262b; }
 .backend-userbar { background: #1c1c1eeb !important; }
 /* Queue/progress bars and any remaining accent fills carry dark text for the same reason. */
@@ -124,9 +131,9 @@
 .primary, dialog button.primary, .dialog-actions button.primary {
   background: #0a7c8a; color: #fff;
 }
-.primary:hover, dialog button.primary:hover { background: #0e93a3; color: #fff; }
+@media (hover:hover) and (pointer:fine){.primary:hover, dialog button.primary:hover{ background: #0e93a3; color: #fff; }}
 .quote-image-button { background: #146382; color: #fff; }
-.quote-image-button:hover { background: #1b7fa8; color: #fff; }
+@media (hover:hover) and (pointer:fine){.quote-image-button:hover{ background: #1b7fa8; color: #fff; }}
 #quoteTable .row-number { background: #0a7c8a; color: #fff; }
 #quoteTable th { background: #146382; color: #fff; }
 #quoteTable th:nth-child(n+6):nth-child(-n+10) { background: #0e6e54; }
@@ -206,7 +213,7 @@
    close to the track to read as selected. */
 .theme-switch { background:#7676803d; }
 .theme-switch button { color:var(--label-2); }
-.theme-switch button:hover { color:var(--label); }
+@media (hover:hover) and (pointer:fine){.theme-switch button:hover{ color:var(--label); }}
 .theme-switch button[aria-pressed="true"] { background:#48484a; color:var(--label); box-shadow:none; }
 
 /* Earnings-date advisory. Same amber pairing as the TIMEOUT issuer chips, which measured 7:1 on
@@ -241,3 +248,42 @@
   background: var(--bg-inset); border-color: var(--accent); color: var(--label);
 }
 .backend-finalize-confirm strong { color: var(--accent-strong); }
+
+/* Undo, resume and the advisory jump buttons. The resume bar keeps the amber warning language
+   already used by the earnings advisory and the TIMEOUT chips, so the page has one vocabulary for
+   "needs your attention" rather than three. */
+.undo-bar { background: var(--bg-inset); color: var(--label); }
+.undo-bar-action { background: var(--accent); color: #08262b; }
+.resume-bar { background: #ff9f0a29; border-left-color: #ff9f0a; color: var(--label); }
+.resume-bar-action { background: #ffb340; color: #2b1c00; }
+.resume-bar-dismiss { border-color: #6b5320; color: var(--label-2); }
+.earnings-advisory-jump { background: #ffffff14; color: var(--label); }
+@media (hover:hover) and (pointer:fine){.earnings-advisory-jump:hover{ background: #ffffff24; }}
+/* Results row view and terms chips.
+   The teal tokens invert for dark -- --teal-deep becomes #6fa8b0 and --teal-core becomes #3ab3c4 --
+   so white header text on them measures 2.66:1 and 2.49:1 and fails AA. Header backgrounds are
+   therefore pinned here to the same fixed, measured teals the other dark tables already use, and
+   not left to the tokens. */
+.ranking-table thead th { background: #0a7c8a; color: #fff; }
+.ranking-table thead .term-upfront { background: #06525c; color: #fff; }
+.ranking-table .rank-col { background: #146382; color: #fff; }
+.ranking-table tbody th { background: var(--bg-elevated); box-shadow: 1px 0 0 var(--separator-solid); }
+/* The pressed pill is darker than its track in dark mode, which alone reads as weaker rather than
+   selected, so it also carries the accent tint and border. */
+.backend-results-view button[aria-pressed="true"] { background: #3ab3c42e; color: var(--accent-strong); box-shadow: inset 0 0 0 1px #3ab3c459; }
+
+/* Light tints that had no dark counterpart.
+   Both rules below set a near-white background in the light sheet and set no colour of their own,
+   so the text inside them fell through to --label, which is near-white in dark. The result was
+   invisible text on a visible surface — a state that looks styled rather than broken, which is why
+   neither was caught by looking at the screen. */
+
+/* The custom-fifth row is tinted mint in light so it reads as "chosen, not ranked". The tint has to
+   invert, not persist: the row carries the quoted value, and that value was landing at 1.13:1. */
+.custom-fifth-row { background: #3ab3c41f; }
+.custom-fifth-row td:first-child { color: var(--accent-strong); }
+
+/* An invalid field is pinned to #fff !important in the light sheet, which in dark produced a white
+   box with near-white text — the one state where the user most needs to read what they typed.
+   The !important here exists only to counter that one. */
+.invalid { background: #d1352b26 !important; color: var(--label) !important; }

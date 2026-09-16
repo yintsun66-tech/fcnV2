@@ -2,14 +2,17 @@
 <html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0b4a6f" />
     <title>FCN / DAC 詢價條件</title>
-    <link rel="stylesheet" href="./styles.css?v=static-card-employee-v1" />
+    <link rel="icon" href="./icon.svg?v=icon-v1" type="image/svg+xml" />
+    <link rel="icon" href="./icon-32.png?v=icon-v1" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=icon-v1" />
+    <link rel="stylesheet" href="./styles.css?v=table-image-v1" />
     <link
       id="darkSheet"
       rel="stylesheet"
-      href="./styles-dark.css?v=dark-dialogs-v1"
+      href="./styles-dark.css?v=market-holidays-v2"
       media="(prefers-color-scheme: dark)"
     />
     <script>
@@ -49,6 +52,19 @@
         </div>
         <div class="quote-count" aria-live="polite"><strong id="quoteCount">1</strong> / 20 筆</div>
       </header>
+
+      <aside id="marketHolidayAlert" class="market-holiday-alert" aria-labelledby="marketHolidayTitle" hidden>
+        <div class="market-holiday-heading">
+          <span class="market-holiday-icon" aria-hidden="true">!</span>
+          <div>
+            <p class="eyebrow">MARKET HOLIDAY NOTICE</p>
+            <h2 id="marketHolidayTitle">今日主要市場休市提醒</h2>
+          </div>
+          <strong class="market-holiday-date" data-market-holiday-date></strong>
+        </div>
+        <p class="market-holiday-priority" data-market-holiday-priority></p>
+        <ul data-market-holiday-list></ul>
+      </aside>
 
       <section class="notice" aria-label="填寫說明">
         <strong>求值規則：</strong>以空白欄位表示求值；每筆交易的價格相關欄位必須且只能留一欄空白。
@@ -273,11 +289,12 @@
       </div>
     </dialog>
 
-    <script type="module" src="./app.js?v=performance-modules-v1"></script>
-    <script type="module" src="./earnings-advisory.mjs?v=earnings-v5"></script>
+    <script type="module" src="./market-holidays.mjs?v=market-holidays-v1"></script>
+    <script type="module" src="./app.js?v=field-feedback-v1"></script>
+    <script type="module" src="./earnings-advisory.mjs?v=undo-resume-v1"></script>
     <script type="module">
       if (location.hostname === "app.yintsun66.com" || new URLSearchParams(location.search).get("backend") === "1") {
-        import("./backend-client.js?v=performance-modules-v1");
+        import("./backend-client.js?v=table-image-v1");
       }
     </script>
     <script>

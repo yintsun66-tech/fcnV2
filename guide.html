@@ -2,13 +2,16 @@
 <html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FCN / DAC 詢價系統使用說明</title>
-    <link rel="stylesheet" href="./styles.css?v=static-card-employee-v1" />
+    <link rel="icon" href="./icon.svg?v=icon-v1" type="image/svg+xml" />
+    <link rel="icon" href="./icon-32.png?v=icon-v1" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=icon-v1" />
+    <link rel="stylesheet" href="./styles.css?v=table-image-v1" />
     <link
       id="darkSheet"
       rel="stylesheet"
-      href="./styles-dark.css?v=dark-dialogs-v1"
+      href="./styles-dark.css?v=dark-fifth-fix-v1"
       media="(prefers-color-scheme: dark)"
     />
     <script>
@@ -71,11 +74,12 @@
           <li>輸入交易條件，方式與靜態版相同。</li>
           <li>勾選要詢價的發行機構。畫面會顯示<strong>選取家數</strong>與<strong>實際寄出封數</strong>；BNP、MS、JPM、巴克萊共用同一種郵件格式，會合併為一封信寄出。</li>
           <li>送出後系統一次完成建立、驗證與寄送，直接進入詢價流程。</li>
-          <li>回覆期間可看到<strong>暫定排名</strong>，數值仍會變動，不會建立正式排名，也不能產報價圖。</li>
+          <li>回覆期間可看到<strong>暫定排名</strong>，數值仍會變動，不會建立正式排名，也不能產報價圖。等待畫面同時會回顯每筆交易送出的商品條件，<strong>Upfront / NotePrice 置於最前</strong>，不需離開畫面就能核對。</li>
           <li>回覆期結束後建立<strong>正式排名</strong>：自動顯示前四名，第五名由使用者從其餘有效機構自選。</li>
           <li>在發行機構旁點選「產出報價圖」；圖片在自己的瀏覽器產生，會先顯示預覽，電腦可另開頁面存檔，手機或平板長按圖片儲存。</li>
         </ol>
         <ul>
+          <li><strong>比價結果有兩種檢視。</strong>「卡片」為每筆交易一張，提供報價圖、市場與風險分析及第五名自選；「表格」為每筆交易一列，<strong>第 1～4 名的發行機構與報價緊接在交易代碼之後、置於最左側</strong>，其後才是與輸入表格相同順序的商品條件，適合多筆交易橫向比較。切換方式記在本瀏覽器。求值的那一欄刻意留白，兩種檢視都顯示為「詢價中」，代表那是本次請發行機構報價的欄位，不是漏填。</li>
           <li><strong>只有勾選的機構會進入比價。</strong>由於部分機構共用同一封信，未勾選者仍可能回信，這類回覆會保留供稽核，但不會進入暫定排名、正式排名、自選第五名或報價圖。<strong>想比價的機構務必勾選。</strong></li>
           <li><strong>晚到的報價</strong>不會改動已成立的排名；需要納入時可建立新的排名版本，舊版本永久保留。</li>
           <li>正式排名的前四名或自選第五名，可另開「市場與風險分析」頁。該頁的參考現價欄位若留空，會自動帶入<strong>前一個已收盤美股交易日的收盤價</strong>（非即時報價），並標示資料來源與日期；此數值只存在目前瀏覽器，不會改變排名、寄件內容或報價圖。</li>

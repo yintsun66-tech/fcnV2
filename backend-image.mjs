@@ -32,7 +32,8 @@ export function createImageController({
   getRfqId,
   request,
   resetSnapshot,
-  scheduleResultRefresh
+  scheduleResultRefresh,
+  buildTableSheet
 }) {
   const progressDialog = document.querySelector("#backendProgress");
 
@@ -87,6 +88,66 @@ export function createImageController({
     preview.querySelector("[data-card-close]").focus();
   }
 
+  // Rasterizing inside a sandboxed iframe is what keeps an export light-themed: the document is
+  // self-contained, so neither styles-dark.css nor the theme picker can reach it. `autoWidth` is for
+  // the row-view sheet, whose width depends on how many rank columns the user kept.
+  async function rasterizeDocument(html, width, deadlineAt, html2canvas, { autoWidth = false } = {}) {
+    const frame = document.createElement("iframe");
+    frame.setAttribute("sandbox", "allow-same-origin");
+    frame.setAttribute("aria-hidden", "true");
+    frame.setAttribute("tabindex", "-1");
+    frame.style.cssText = `position:fixed;left:0;top:0;width:${width}px;height:10px;border:0;opacity:0;pointer-events:none;z-index:0`;
+    document.body.append(frame);
+    try {
+      await withRenderDeadline(() => new Promise((resolve, reject) => {
+        frame.addEventListener("load", resolve, { once: true });
+        frame.addEventListener("error", () => reject(new Error("報價圖載入失敗。")), { once: true });
+        frame.srcdoc = html;
+      }), "載入", deadlineAt);
+      const frameDocument = frame.contentDocument;
+      if (!frameDocument?.body) throw new Error("無法讀取報價圖內容。");
+      if (frameDocument.fonts?.ready) {
+        try {
+          await withRenderDeadline(() => frameDocument.fonts.ready, "字型", deadlineAt, CARD_FONT_TIMEOUT_MS);
+        } catch {
+          // Rendering with the resolved fallback font is preferable to failing the export.
+        }
+      }
+      // The sheet keeps its cells on one line, so the content already overflows the narrow starting
+      // frame and scrollWidth reports the true width before the frame is widened to match.
+      const renderWidth = autoWidth
+        ? Math.max(width, Math.ceil(Math.max(frameDocument.body.scrollWidth, frameDocument.documentElement.scrollWidth)))
+        : width;
+      if (renderWidth !== width) frame.style.width = `${renderWidth}px`;
+      const height = Math.max(frameDocument.body.scrollHeight, frameDocument.documentElement.scrollHeight);
+      if (!height) throw new Error("報價圖版面尚未完成，請再試一次。");
+      frame.style.height = `${height}px`;
+      const scale = Math.max(
+        0.5,
+        Math.min(CARD_OUTPUT_MAX_SCALE, Math.sqrt(CARD_OUTPUT_CANVAS_PIXELS / (renderWidth * height)))
+      );
+      const canvas = await withRenderDeadline(() => html2canvas(frameDocument.body, {
+        backgroundColor: null,
+        scale,
+        logging: false,
+        useCORS: false,
+        width: renderWidth,
+        height,
+        windowWidth: renderWidth,
+        windowHeight: height
+      }), "繪製", deadlineAt);
+      const blob = await withRenderDeadline(
+        () => new Promise(resolve => canvas.toBlob(resolve, "image/png")),
+        "轉檔",
+        deadlineAt
+      );
+      if (!blob) throw new Error("報價圖轉檔失敗。");
+      return blob;
+    } finally {
+      frame.remove();
+    }
+  }
+
   async function renderCardLocally(rfqId, tradeCode, quoteId) {
     const deadlineAt = Date.now() + CARD_RENDER_TOTAL_TIMEOUT_MS;
     const [{ card }, html2canvas] = await Promise.all([
@@ -98,54 +159,23 @@ export function createImageController({
       ),
       withRenderDeadline(() => loadHtml2Canvas(), "載入圖片元件", deadlineAt)
     ]);
-    const frame = document.createElement("iframe");
-    frame.setAttribute("sandbox", "allow-same-origin");
-    frame.setAttribute("aria-hidden", "true");
-    frame.setAttribute("tabindex", "-1");
-    frame.style.cssText = `position:fixed;left:0;top:0;width:${card.width}px;height:10px;border:0;opacity:0;pointer-events:none;z-index:0`;
-    document.body.append(frame);
-    try {
-      await withRenderDeadline(() => new Promise((resolve, reject) => {
-        frame.addEventListener("load", resolve, { once: true });
-        frame.addEventListener("error", () => reject(new Error("報價圖載入失敗。")), { once: true });
-        frame.srcdoc = card.html;
-      }), "載入", deadlineAt);
-      const frameDocument = frame.contentDocument;
-      if (!frameDocument?.body) throw new Error("無法讀取報價圖內容。");
-      if (frameDocument.fonts?.ready) {
-        try {
-          await withRenderDeadline(() => frameDocument.fonts.ready, "字型", deadlineAt, CARD_FONT_TIMEOUT_MS);
-        } catch {
-          // Rendering with the resolved fallback font is preferable to failing the export.
-        }
-      }
-      const height = Math.max(frameDocument.body.scrollHeight, frameDocument.documentElement.scrollHeight);
-      if (!height) throw new Error("報價圖版面尚未完成，請再試一次。");
-      frame.style.height = `${height}px`;
-      const scale = Math.max(
-        0.5,
-        Math.min(CARD_OUTPUT_MAX_SCALE, Math.sqrt(CARD_OUTPUT_CANVAS_PIXELS / (card.width * height)))
-      );
-      const canvas = await withRenderDeadline(() => html2canvas(frameDocument.body, {
-        backgroundColor: null,
-        scale,
-        logging: false,
-        useCORS: false,
-        width: card.width,
-        height,
-        windowWidth: card.width,
-        windowHeight: height
-      }), "繪製", deadlineAt);
-      const blob = await withRenderDeadline(
-        () => new Promise(resolve => canvas.toBlob(resolve, "image/png")),
-        "轉檔",
-        deadlineAt
-      );
-      if (!blob) throw new Error("報價圖轉檔失敗。");
-      showCardImage(blob, `${rfqId}-${card.tradeCode}-${card.issuer}.png`);
-    } finally {
-      frame.remove();
-    }
+    const blob = await rasterizeDocument(card.html, card.width, deadlineAt, html2canvas);
+    showCardImage(blob, `${rfqId}-${card.tradeCode}-${card.issuer}.png`);
+  }
+
+  function clientDeviceClass() {
+    if (matchMedia("(max-width: 700px)").matches) return "PHONE";
+    if (matchMedia("(max-width: 1100px)").matches) return "TABLET";
+    return "DESKTOP";
+  }
+
+  function reportClientImageEvent(rfqId, outcome, startedAt) {
+    const elapsedMs = Math.max(0, Math.min(120_000, Math.round(performance.now() - startedAt)));
+    void request(`/rfqs/${rfqId}/image-events`, {
+      method: "POST",
+      body: JSON.stringify({ outcome, elapsedMs, deviceClass: clientDeviceClass() }),
+      timeoutMs: 4_000
+    }).catch(() => {});
   }
 
   async function requestArtifact(target) {
@@ -156,11 +186,14 @@ export function createImageController({
     const status = document.querySelector("#backendCountdown");
     target.disabled = true;
     target.textContent = "產圖中…";
+    const localRenderStartedAt = performance.now();
     try {
       try {
         await renderCardLocally(rfqId, artifactTrade, artifactQuote);
+        reportClientImageEvent(rfqId, "LOCAL_READY", localRenderStartedAt);
         return;
       } catch (localError) {
+        reportClientImageEvent(rfqId, "LOCAL_FAILED", localRenderStartedAt);
         const message = localError instanceof Error ? localError.message : "本機產圖失敗。";
         status.textContent = `${message} 改用伺服器產圖…`;
       }
@@ -181,5 +214,31 @@ export function createImageController({
     }
   }
 
-  return { requestArtifact };
+  // The row-view export. Nothing is fetched: the caller builds the sheet from the results payload
+  // this browser already received and is already displaying, so no additional quote is authorized
+  // and no raw quote leaves the page. There is deliberately no server fallback -- no row renderer
+  // exists server-side, and adding one would push this onto the metered Browser Rendering path that
+  // ADR 0016 moved away from. A failure here leaves the on-screen table untouched.
+  async function requestTableImage(target) {
+    if (!target || typeof buildTableSheet !== "function") return;
+    const status = document.querySelector("#backendCountdown");
+    const originalLabel = target.textContent;
+    target.disabled = true;
+    target.textContent = "產圖中…";
+    try {
+      const sheet = buildTableSheet();
+      if (!sheet) throw new Error("目前沒有可產圖的正式排名結果。");
+      const deadlineAt = Date.now() + CARD_RENDER_TOTAL_TIMEOUT_MS;
+      const html2canvas = await withRenderDeadline(() => loadHtml2Canvas(), "載入圖片元件", deadlineAt);
+      const blob = await rasterizeDocument(sheet.html, sheet.width, deadlineAt, html2canvas, { autoWidth: true });
+      showCardImage(blob, sheet.filename);
+    } catch (error) {
+      if (status) status.textContent = error instanceof Error ? error.message : "表格圖產出失敗，請稍後再試。";
+    } finally {
+      target.disabled = false;
+      target.textContent = originalLabel;
+    }
+  }
+
+  return { requestArtifact, requestTableImage };
 }

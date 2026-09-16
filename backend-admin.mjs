@@ -24,6 +24,135 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
   const adminRfqPerformance = document.querySelector("#backendRfqPerformance");
   const adminRfqHealth = document.querySelector("#backendRfqHealth");
   const adminMarketHealth = document.querySelector("#backendMarketHealth");
+  const adminLifecycleDialog = document.querySelector("#backendLifecycleProducts");
+  const adminLifecycleList = document.querySelector("#backendLifecycleList");
+  const adminLifecycleHealth = document.querySelector("#backendLifecycleHealth");
+  const adminLifecycleError = document.querySelector("#backendLifecycleError");
+  const adminLifecycleExport = document.querySelector("#backendLifecycleExport");
+  const adminLifecycleReprocess = document.querySelector("#backendLifecycleReprocess");
+  const adminLifecycleNote = document.querySelector("#backendLifecycleNote");
+  const adminLifecycleLoadMore = document.querySelector("#backendLifecycleLoadMore");
+  const adminLifecycleFilters = document.querySelector("#backendLifecycleFilters");
+  const adminLifecycleFiltersReset = document.querySelector("#backendLifecycleFiltersReset");
+  let lifecycleProducts = [];
+  let lifecycleTotal = 0;
+  let lifecycleLoading = false;
+
+  function formatPercent(value) {
+    return Number.isFinite(value) ? `${Number(value.toFixed(6))}%` : "—";
+  }
+
+  function renderLifecycleHealth(health) {
+    const counts = items => Object.fromEntries((items || []).map(item => [item.status, item.count]));
+    const messages = counts(health.messages);
+    const products = counts(health.products);
+    const prices = counts(health.entryPrices);
+    const parserErrors = (health.parserErrors || [])
+      .map(item => `${escapeHtml(item.errorCode)} ${escapeHtml(item.count)}`)
+      .join("｜");
+    const reprocessable = Number(health.reprocessableManualReviews || 0);
+    adminLifecycleReprocess.hidden = reprocessable < 1;
+    adminLifecycleReprocess.textContent = reprocessable > 0
+      ? `以新版解析器重試 ${reprocessable} 封`
+      : "重新解析待檢查郵件";
+    adminLifecycleHealth.innerHTML = `<article><strong>自動入庫狀態</strong>
+      <p>郵件：已入庫 ${messages.IMPORTED || 0}｜人工檢查 ${messages.MANUAL_REVIEW || 0}｜失敗 ${messages.FAILED || 0}</p>
+      <p>商品：有效 ${products.ACTIVE || 0}｜待期初價 ${products.PENDING_ENTRY_PRICES || 0}</p>
+      <p>期初價：完成 ${prices.AVAILABLE || 0}｜待查 ${prices.PENDING || 0}｜暫無資料 ${prices.UNAVAILABLE || 0}</p>
+      ${parserErrors ? `<p>解析錯誤：${parserErrors}</p>` : ""}
+      <small>收件地址 ${escapeHtml(health.inboundAddress)}｜更新 ${escapeHtml(formatDateTime(health.generatedAt))}</small>
+    </article>`;
+  }
+
+  function renderLifecycleProducts(products) {
+    adminLifecycleLoadMore.hidden = lifecycleProducts.length >= lifecycleTotal;
+    if (!products.length) {
+      adminLifecycleList.innerHTML = "<p class=\"backend-archive-empty\">目前沒有符合篩選條件的成交商品。</p>";
+      return;
+    }
+    const underlyingCells = product => Array.from({ length: 5 }, (_, index) => {
+      const item = (product.underlyings || [])[index];
+      if (!item?.underlying) return "<td>—</td><td>—</td>";
+      const price = Number(item.initialEntryPrice);
+      return `<td>${escapeHtml(item.underlying)}</td><td>${item.initialEntryPrice == null || !Number.isFinite(price) ? "待補" : escapeHtml(price.toFixed(2))}</td>`;
+    }).join("");
+    adminLifecycleList.innerHTML = `<table class="backend-lifecycle-table"><thead><tr>
+      <th>交易日</th><th>最後評價日</th><th>到期日</th><th>提前到期日</th><th>狀態</th><th>發行機構</th>
+      <th>商品代號</th><th>Product</th><th>Currency</th><th>Guaranteed Periods (m)</th>
+      <th>BBG Code 1</th><th>期初進場價 1</th><th>BBG Code 2</th><th>期初進場價 2</th>
+      <th>BBG Code 3</th><th>期初進場價 3</th><th>BBG Code 4</th><th>期初進場價 4</th>
+      <th>BBG Code 5</th><th>期初進場價 5</th><th>Strike (%)</th><th>KO Type</th>
+      <th>KO Barrier (%)</th><th>Coupon p.a. (%)</th><th>NotePrice (%)</th><th>Tenor</th>
+      <th>Barrier Type</th><th>KI Barrier (%)</th><th>Observation Frequency</th>
+    </tr></thead><tbody>${products.map(product => `<tr class="${product.status === "expire" ? `backend-lifecycle-expired backend-lifecycle-expired-${product.expirationReason === "EARLY_TERMINATION" ? "early" : "maturity"}` : ""}">
+      <td>${escapeHtml(product.tradeDate)}</td>
+      <td>${escapeHtml(product.finalValuationDate || "—")}</td><td>${escapeHtml(product.maturityDate || "—")}</td>
+      <td>${escapeHtml(product.earlyTerminationDate || "—")}</td>
+      <td><span class="backend-lifecycle-status backend-lifecycle-status-${product.status === "expire" ? "expire" : "current"}">${escapeHtml(product.status)}</span></td>
+      <td><strong>${escapeHtml(product.issuerDisplayName || product.issuer)}</strong></td>
+      <td><strong>${escapeHtml(product.productCode)}</strong></td>
+      <td>${escapeHtml(product.productType)}</td><td>${escapeHtml(product.currency)}</td>
+      <td>${product.guaranteedPeriodsMonths == null ? "—" : escapeHtml(product.guaranteedPeriodsMonths)}</td>
+      ${underlyingCells(product)}
+      <td>${escapeHtml(formatPercent(product.conversionPricePct))}</td><td>${escapeHtml(product.koObservationType || "—")}</td>
+      <td>${escapeHtml(formatPercent(product.koBarrierPct))}</td><td>${escapeHtml(formatPercent(product.couponPaPct))}</td>
+      <td>${escapeHtml(formatPercent(product.notePricePct))}</td><td>${escapeHtml(product.tenorLabel || "—")}</td>
+      <td>${escapeHtml(product.downsideObservationType || "—")}</td><td>${escapeHtml(formatPercent(product.downsideBarrierPct))}</td>
+      <td>${escapeHtml(product.paymentFrequency || "—")}</td>
+    </tr>`).join("")}</tbody></table>`;
+  }
+
+  function lifecycleFilterParams() {
+    const params = new URLSearchParams({ limit: "200", offset: String(lifecycleProducts.length) });
+    new FormData(adminLifecycleFilters).forEach((rawValue, key) => {
+      const value = String(rawValue).trim();
+      if (value) params.set(key, value);
+    });
+    return params;
+  }
+
+  async function loadLifecycleProducts(reset = false) {
+    if (lifecycleLoading) return;
+    lifecycleLoading = true;
+    adminLifecycleLoadMore.disabled = true;
+    if (reset) {
+      lifecycleProducts = [];
+      lifecycleTotal = 0;
+    }
+    try {
+      const response = await request(`/lifecycle/products?${lifecycleFilterParams()}`);
+      lifecycleProducts = [...lifecycleProducts, ...(response.products || [])];
+      lifecycleTotal = response.total || lifecycleProducts.length;
+      renderLifecycleProducts(lifecycleProducts);
+    } finally {
+      lifecycleLoading = false;
+      adminLifecycleLoadMore.disabled = false;
+    }
+  }
+
+  async function openLifecycleProducts() {
+    if (!getUser()) return;
+    const support = isSupportRole();
+    adminLifecycleError.textContent = "";
+    adminLifecycleHealth.innerHTML = "";
+    adminLifecycleHealth.hidden = !support;
+    adminLifecycleExport.hidden = !support;
+    adminLifecycleReprocess.hidden = true;
+    adminLifecycleNote.textContent = support
+      ? "所有已登入使用者均可查看；ADMIN／PS 可另外查看入庫健康狀態並下載 44 欄 CSV。"
+      : "此一覽以成交商品資料庫為準，期初進場價依交易日收盤價補入。";
+    adminLifecycleList.innerHTML = "<p class=\"backend-archive-empty\">正在載入成交商品…</p>";
+    adminLifecycleLoadMore.hidden = true;
+    if (!adminLifecycleDialog.open) adminLifecycleDialog.showModal();
+    try {
+      await loadLifecycleProducts(true);
+      if (support) renderLifecycleHealth(await request("/admin/lifecycle/health"));
+    } catch (error) {
+      adminLifecycleError.textContent = error.message;
+      adminLifecycleHealth.innerHTML = "";
+      adminLifecycleList.innerHTML = "";
+    }
+  }
 
   function renderAdminOutboundList(records) {
     if (!records.length) {
@@ -216,7 +345,7 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
   }
 
   function renderAdminRfqHealth(health) {
-    if (!health?.issuers?.length) {
+    if (!health) {
       adminRfqHealth.innerHTML = "";
       return;
     }
@@ -226,20 +355,33 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
       ISSUER_TIMEOUT: "逾時",
       UNMATCHED_INBOUND: "未配對來信",
       INBOUND_MANUAL_REVIEW: "待人工檢查",
-      FAILED_ARTIFACT: "報價圖失敗"
+      FAILED_ARTIFACT: "報價圖失敗",
+      STALE_EMAIL_PARSE_JOB: "郵件解析工作卡住",
+      FAILED_EMAIL_PARSE_JOB: "郵件解析工作失敗",
+      STALE_IMAGE_RENDER_JOB: "報價圖工作卡住"
     };
+    const pipeline = health.pipeline || {};
+    const mail = pipeline.emailParsing || {};
+    const image = pipeline.imageRendering || {};
+    const auth = pipeline.authentication || {};
+    const issuers = Array.isArray(health.issuers) ? health.issuers : [];
     const alerts = health.alerts?.length
       ? `<div class="backend-health-alerts">${health.alerts.map(alert => `<span><b>${escapeHtml(alert.issuer || "系統")}</b>${escapeHtml(alertLabels[alert.code] || alert.code)} ${escapeHtml(alert.count)}</span>`).join("")}</div>`
       : "<p class=\"backend-health-ok\">目前沒有偵測到彙總異常。</p>";
     adminRfqHealth.innerHTML = `
       <section class="backend-health-panel">
         <header><h3>近 ${escapeHtml(health.windowDays)} 天發行機構健康狀態</h3><small>僅為彙總，不含郵件內容與報價數值</small></header>
-        <div class="backend-health-grid">${health.issuers.map(item => `
+        ${issuers.length ? `<div class="backend-health-grid">${issuers.map(item => `
           <article>
             <b>${escapeHtml(item.issuer)}</b>
             <strong>${item.validRatePct === null ? "—" : `${escapeHtml(item.validRatePct)}%`}</strong>
             <small>有效 ${escapeHtml(item.validReply)}/${escapeHtml(item.expected)}｜收信 ${escapeHtml(item.inbound)}｜逾時 ${escapeHtml(item.timeout)}｜解析 ${escapeHtml(item.parseError)}｜晚到 ${escapeHtml(item.lateReply)}</small>
           </article>`).join("")}
+        </div>` : ""}
+        <div class="backend-health-grid">
+          <article><b>郵件解析</b><strong>${escapeHtml(mail.failed || 0)} 失敗</strong><small>排隊 ${escapeHtml(mail.queued || 0)}｜執行 ${escapeHtml(mail.running || 0)}｜卡住 ${escapeHtml(mail.staleRunning || 0)}｜重試 ${escapeHtml(mail.retried || 0)}</small></article>
+          <article><b>報價圖</b><strong>${escapeHtml(image.localReady || 0)} 次本機成功</strong><small>本機失敗 ${escapeHtml(image.localFailed || 0)}｜平均 ${image.localAverageMs == null ? "—" : `${escapeHtml(image.localAverageMs)} ms`}｜伺服器失敗 ${escapeHtml(image.failed || 0)}｜卡住 ${escapeHtml(image.staleRunning || 0)}</small></article>
+          <article><b>登入</b><strong>${escapeHtml(auth.loginSucceeded || 0)} 次成功</strong><small>失敗 ${escapeHtml(auth.loginFailed || 0)}｜平均 ${auth.averageMs == null ? "—" : `${escapeHtml(auth.averageMs)} ms`}｜申請成功 ${escapeHtml(auth.registrationSucceeded || 0)}｜申請失敗 ${escapeHtml(auth.registrationFailed || 0)}</small></article>
         </div>
         ${alerts}
       </section>`;
@@ -452,6 +594,38 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
     }
   });
   document.querySelector("#closeBackendAccounts").addEventListener("click", () => adminAccountsDialog.close());
+  document.querySelector("#closeBackendLifecycleProducts").addEventListener("click", () => adminLifecycleDialog.close());
+  adminLifecycleFilters.addEventListener("submit", event => {
+    event.preventDefault();
+    adminLifecycleError.textContent = "";
+    adminLifecycleList.innerHTML = "<p class=\"backend-archive-empty\">正在套用商品篩選條件…</p>";
+    void loadLifecycleProducts(true).catch(error => { adminLifecycleError.textContent = error.message; });
+  });
+  adminLifecycleFiltersReset.addEventListener("click", event => {
+    event.preventDefault();
+    adminLifecycleFilters.reset();
+    adminLifecycleError.textContent = "";
+    adminLifecycleList.innerHTML = "<p class=\"backend-archive-empty\">正在載入全部成交商品…</p>";
+    void loadLifecycleProducts(true).catch(error => { adminLifecycleError.textContent = error.message; });
+  });
+  adminLifecycleLoadMore.addEventListener("click", () => {
+    void loadLifecycleProducts().catch(error => { adminLifecycleError.textContent = error.message; });
+  });
+  adminLifecycleReprocess.addEventListener("click", async () => {
+    adminLifecycleReprocess.disabled = true;
+    adminLifecycleError.textContent = "";
+    try {
+      const result = await request("/admin/lifecycle/reprocess", { method: "POST", body: "{}" });
+      adminLifecycleError.textContent = result.requeuedCount > 0
+        ? `已重新排入 ${result.requeuedCount} 封郵件，請稍後重新開啟本頁查看結果。`
+        : "目前沒有可使用新版解析器重試的郵件。";
+      renderLifecycleHealth(await request("/admin/lifecycle/health"));
+    } catch (error) {
+      adminLifecycleError.textContent = error.message;
+    } finally {
+      adminLifecycleReprocess.disabled = false;
+    }
+  });
   accountLookupBtn.addEventListener("click", () => void lookupAccountByEmployee());
   accountLookupInput.addEventListener("keydown", event => {
     if (event.key === "Enter") {
@@ -468,6 +642,7 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
     openRegistrationReview: openAdminRegistrationReview,
     openOutboundArchive: openAdminOutboundArchive,
     openTimelines: openAdminRfqTimelines,
-    openAccounts: openAdminAccounts
+    openAccounts: openAdminAccounts,
+    openLifecycleProducts
   };
 }

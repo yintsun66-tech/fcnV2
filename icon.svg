@@ -1,0 +1,12 @@
+<!-- App mark: ascending bars for the rank-one-to-four comparison the app exists to produce.
+     Geometry is duplicated in scripts/make-icons source for the PNG fallbacks; keep them in step.
+     Deliberately no prefers-color-scheme rule: the PNG fallbacks cannot adapt, and a mark that
+     changes in some browsers but not others reads as two different sites. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="FCN quote comparison">
+  <rect width="64" height="64" rx="14" fill="#0b4a6f" />
+  <g fill="#ffffff">
+    <rect x="14" y="36" width="10" height="16" rx="2" />
+    <rect x="27" y="26" width="10" height="26" rx="2" />
+    <rect x="40" y="14" width="10" height="38" rx="2" />
+  </g>
+</svg>

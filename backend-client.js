@@ -22,12 +22,15 @@
     fastCloseReady: false,
     latestResultsRfq: null,
     latestResultTrades: [],
+    resultsView: "cards",
+    tableImageRanks: 4,
     artifactByQuote: {},
     customFifthSelections: {},
     hasRankings: false,
     rfqListScope: "active",
     rfqListCursor: null,
-    rfqListItems: []
+    rfqListItems: [],
+    rfqListSummary: { activeCount: 0, unrankedLateReplyCount: 0 }
   };
   let imageControllerPromise = null;
   let analysisControllerPromise = null;
@@ -43,6 +46,7 @@
       <button id="backendMyRfqs" type="button" class="secondary">我的詢價 <span id="backendRfqBadge" class="backend-rfq-badge" hidden>0</span></button>
       <button id="backendAdminAccounts" type="button" class="secondary backend-mobile-collapsible" hidden>所有帳號列表</button>
       <button id="backendAdminRegistrations" type="button" class="secondary backend-mobile-collapsible" hidden>使用者申請審核</button>
+      <button id="backendAdminLifecycle" type="button" class="secondary backend-mobile-collapsible" hidden>商品資料一覽</button>
       <button id="backendAdminOutbound" type="button" class="secondary backend-mobile-collapsible" hidden>管理者寄件紀錄</button>
       <button id="backendAdminTimelines" type="button" class="secondary backend-mobile-collapsible" hidden>RFQ 處理時間軸</button>
       <button id="backendLogout" type="button" class="secondary backend-mobile-collapsible">登出</button>
@@ -105,7 +109,7 @@
     </dialog>
     <dialog id="backendProgress" class="backend-dialog backend-results-dialog">
       <section class="backend-panel">
-        <div class="backend-results-heading"><div><p class="eyebrow">AUTOMATED RFQ</p><h2>詢價進度與比價結果</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="backendFinalizeNow" type="button" class="secondary" hidden>提早結束並比價</button><button id="backendRecalculate" type="button" class="secondary" hidden>納入晚到報價重新排名</button><button id="backendBackToRfqs" type="button" class="secondary">我的詢價</button><button id="closeBackendProgress" type="button" class="secondary">返回輸入</button></div></div>
+        <div class="backend-results-heading"><div><p class="eyebrow">AUTOMATED RFQ</p><h2>詢價進度與比價結果</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap"><div id="backendResultsView" class="backend-results-view" role="group" aria-label="比價結果顯示方式"><button type="button" data-results-view="cards" aria-pressed="true">卡片</button><button type="button" data-results-view="table" aria-pressed="false">表格</button></div><button id="backendFinalizeNow" type="button" class="secondary" hidden>提早結束並比價</button><button id="backendRecalculate" type="button" class="secondary" hidden>納入晚到報價重新排名</button><button id="backendBackToRfqs" type="button" class="secondary">我的詢價</button><button id="closeBackendProgress" type="button" class="secondary">返回輸入</button></div></div>
         <section id="backendFinalizeConfirm" class="backend-finalize-confirm" role="alertdialog" aria-labelledby="backendFinalizeConfirmTitle" hidden>
           <strong id="backendFinalizeConfirmTitle">確認提前結束詢價</strong>
           <p id="backendFinalizeConfirmMessage"></p>
@@ -186,11 +190,47 @@
         <div id="backendRfqTimelinesList" class="backend-timeline-list"></div>
       </section>
     </dialog>
+    <dialog id="backendLifecycleProducts" class="backend-dialog backend-accounts-dialog">
+      <section class="backend-panel">
+        <div class="backend-results-heading">
+          <div><p class="eyebrow">PRODUCT LIFECYCLE</p><h2>商品資料一覽</h2></div>
+          <div class="dialog-actions">
+            <button id="backendLifecycleReprocess" type="button" class="secondary" hidden>重新解析待檢查郵件</button>
+            <a id="backendLifecycleExport" class="guide-link" href="/api/v1/admin/lifecycle/export.csv" hidden>下載 44 欄 CSV</a>
+            <button id="closeBackendLifecycleProducts" type="button" class="secondary">關閉</button>
+          </div>
+        </div>
+        <p id="backendLifecycleNote" class="backend-archive-note">成交郵件完全解析後才自動入庫；期初進場價依交易日收盤價補入。所有已登入使用者均可查看。</p>
+        <form id="backendLifecycleFilters" class="backend-lifecycle-filters">
+          <label>商品代號<input id="backendLifecycleProductCode" name="productCode" maxlength="12" autocomplete="off" placeholder="例如 PBQW" /></label>
+          <label>交易日起<input id="backendLifecycleTradeDateFrom" name="tradeDateFrom" type="date" /></label>
+          <label>交易日迄<input id="backendLifecycleTradeDateTo" name="tradeDateTo" type="date" /></label>
+          <label>發行機構<select id="backendLifecycleIssuer" name="issuer">
+            <option value="">全部</option><option>BNP</option><option>MS</option><option>JPM</option>
+            <option>BARCLAYS</option><option value="NOMURA">NOMURA</option><option>UBS</option>
+            <option>DBS</option><option>SG</option><option>CITI</option><option>GS</option><option>CA</option>
+          </select></label>
+          <label>商品類型<select id="backendLifecycleProductType" name="productType"><option value="">全部</option><option>FCN</option><option>DAC</option></select></label>
+          <label>幣別<select id="backendLifecycleCurrency" name="currency"><option value="">全部</option><option>USD</option><option>JPY</option><option>EUR</option><option>HKD</option><option>CNH</option><option>CAD</option><option>GBP</option><option>AUD</option><option>ZAR</option></select></label>
+          <label>狀態<select id="backendLifecycleStatusFilter" name="status"><option value="">全部</option><option value="CURRENT">未到期</option><option value="EXPIRE">expire</option></select></label>
+          <div class="backend-lifecycle-filter-actions"><button type="submit">搜尋／篩選</button><button id="backendLifecycleFiltersReset" type="reset" class="secondary">清除</button></div>
+        </form>
+        <p id="backendLifecycleError" class="backend-error" role="alert"></p>
+        <div id="backendLifecycleHealth" class="backend-rfq-health" hidden></div>
+        <div id="backendLifecycleList" class="backend-accounts-list" aria-live="polite"></div>
+        <button id="backendLifecycleLoadMore" type="button" class="secondary backend-rfq-load-more" hidden>載入更多商品</button>
+      </section>
+    </dialog>
     <dialog id="backendIssuerPicker" class="backend-dialog">
       <form id="backendIssuerPickerForm" class="backend-panel">
         <div class="backend-results-heading"><div><p class="eyebrow">SELECT ISSUERS</p><h2>選擇詢價與比價的發行機構</h2></div></div>
         <p class="backend-archive-note">只有勾選的機構會列入本次詢價與比價。BNP／MS／JPM／BARCLAYS 共用一封詢價信，勾選其中任一家就會寄出該封，但只有勾選者列入比價。</p>
         <label class="issuer-pick-all" style="display:block;margin:6px 0"><input type="checkbox" id="issuerPickAll" checked> <b>全部發行機構</b></label>
+        <div class="issuer-fast-actions" aria-label="精簡詢價快捷操作">
+          <button type="button" id="issuerFastStart" class="secondary">快速模式：改選 1～3 家</button>
+          <button type="button" id="issuerFastApply" class="secondary" hidden>套用我的快速組合</button>
+          <button type="button" id="issuerFastSave" class="secondary">儲存目前組合</button>
+        </div>
         <div class="issuer-pick-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 16px;margin:10px 0">
           ${[["BNP", "BNP"], ["MS", "MS（OBU不得承做）"], ["JPM", "JPM"], ["BARCLAYS", "BARCLAYS"], ["NOMURA", "Nomura"], ["UBS", "UBS"], ["DBS", "DBS"], ["SG", "SG"], ["CITI", "CITI"], ["GS", "GS"], ["CA", "CA"]].map(([value, label]) => `<label class="issuer-pick"><input type="checkbox" class="issuer-pick-item" value="${value}" checked> ${label}</label>`).join("")}
         </div>
@@ -220,6 +260,9 @@
   const issuerPickerSummary = document.querySelector("#backendIssuerPickerSummary");
   const issuerPickerHint = document.querySelector("#backendIssuerPickerHint");
   const issuerPickerError = document.querySelector("#backendIssuerPickerError");
+  const issuerFastStart = document.querySelector("#issuerFastStart");
+  const issuerFastApply = document.querySelector("#issuerFastApply");
+  const issuerFastSave = document.querySelector("#issuerFastSave");
   const newRfqButton = document.querySelector("#backendNewRfq");
   const myRfqsButton = document.querySelector("#backendMyRfqs");
   const rfqBadge = document.querySelector("#backendRfqBadge");
@@ -244,6 +287,8 @@
   const adminRegistrationReviewDialog = document.querySelector("#backendRegistrationReview");
   const adminAccountsButton = document.querySelector("#backendAdminAccounts");
   const adminAccountsDialog = document.querySelector("#backendAccounts");
+  const adminLifecycleButton = document.querySelector("#backendAdminLifecycle");
+  const adminLifecycleDialog = document.querySelector("#backendLifecycleProducts");
   const adminOutboundButton = document.querySelector("#backendAdminOutbound");
   const adminOutboundDialog = document.querySelector("#backendOutboundArchive");
   const adminTimelinesButton = document.querySelector("#backendAdminTimelines");
@@ -310,6 +355,7 @@
     if (!response.ok) {
       const error = new Error(payload?.error?.message || `伺服器錯誤（${response.status}）`);
       error.code = payload?.error?.code;
+      error.fieldErrors = payload?.error?.fieldErrors;
       throw error;
     }
     return payload;
@@ -317,12 +363,13 @@
 
   function loadImageController() {
     if (!imageControllerPromise) {
-      imageControllerPromise = import("./backend-image.mjs?v=performance-modules-v1")
+      imageControllerPromise = import("./backend-image.mjs?v=table-image-v1")
         .then(({ createImageController }) => createImageController({
           getRfqId: () => state.rfqId,
           request,
           resetSnapshot: () => { state.snapshotVersion = null; },
-          scheduleResultRefresh
+          scheduleResultRefresh,
+          buildTableSheet: tableSheetDocument
         }))
         .catch(error => {
           imageControllerPromise = null;
@@ -345,9 +392,85 @@
       });
   }
 
+  function requestTableImageFromButton(event) {
+    const target = event.target.closest("[data-table-image]");
+    if (!target) return;
+    event.preventDefault();
+    void loadImageController()
+      .then(controller => controller.requestTableImage(target))
+      .catch(error => {
+        document.querySelector("#backendCountdown").textContent = error instanceof Error
+          ? error.message
+          : "無法載入報價圖功能。";
+      });
+  }
+
+  // Re-rendering keeps the on-screen table and the export in step, so what the reader sees before
+  // pressing the button is what the PNG contains. Session-only on purpose: unlike the cards/table
+  // toggle this is a per-export choice, and persisting it would silently hide ranks on a later visit.
+  function applyTableRankLimit(select) {
+    const value = Number(select.value);
+    state.tableImageRanks = Number.isInteger(value) && value >= 1 && value <= 4 ? value : 4;
+    if (!state.latestResultsRfq) return;
+    renderResults({ rfq: state.latestResultsRfq, trades: state.latestResultTrades }, state.artifactByQuote);
+  }
+
+  let valuationTransferPending = false;
+  document.addEventListener("click", event => {
+    const button = event.target.closest("[data-valuation-quote]");
+    if (!button || state.user?.role !== "ADMIN" || valuationTransferPending) return;
+    event.preventDefault();
+    const origin = "https://valuation.yintsun66.com";
+    const nonce = crypto.randomUUID();
+    const rfqId = state.rfqId;
+    const userId = state.user.id;
+    const tradeCode = button.dataset.valuationTrade;
+    const quoteId = button.dataset.valuationQuote;
+    // Retain opener only for this bounded, origin/source/nonce checked handshake.
+    const popup = window.open(`${origin}/valuation.html#rfq-import=${nonce}`, "_blank");
+    if (!popup) { alert("請允許彈出視窗，或先登入評價站後重試。"); return; }
+    valuationTransferPending = true;
+    button.disabled = true;
+    const oldLabel = button.textContent;
+    button.textContent = "等待評價站登入…";
+    let active = true;
+    let loading = false;
+    let payload = null;
+    const cleanup = message => {
+      if (!active) return;
+      active = false;
+      clearTimeout(timeout);
+      clearInterval(closedCheck);
+      window.removeEventListener("message", receive);
+      valuationTransferPending = false;
+      button.disabled = false;
+      button.textContent = oldLabel;
+      if (message) alert(message);
+    };
+    const receive = async event => {
+      if (!active || event.origin !== origin || event.source !== popup || event.data?.nonce !== nonce) return;
+      if (state.user?.id !== userId || state.user?.role !== "ADMIN") { cleanup("登入身分已改變，已停止傳送。"); return; }
+      if (event.data?.type === "RFQ_IMPORT_ACK" && payload) { cleanup(); return; }
+      if (event.data?.type === "RFQ_IMPORT_REJECTED") { cleanup("評價站拒絕此報價條件，請檢查商品與數值。"); return; }
+      if (event.data?.type !== "RFQ_IMPORT_READY" || loading) return;
+      loading = true;
+      try {
+        if (!payload) payload = (await request(`/rfqs/${encodeURIComponent(rfqId)}/trades/${encodeURIComponent(tradeCode)}/quotes/${encodeURIComponent(quoteId)}/valuation-input`)).valuationInput;
+        if (active && state.user?.id === userId && state.user?.role === "ADMIN") {
+          popup.postMessage({ type: "RFQ_IMPORT_DATA", nonce, payload }, origin);
+          button.textContent = "正在帶入評價…";
+        }
+      } catch (error) { cleanup(error instanceof Error ? error.message : "報價條件載入失敗。"); }
+      finally { loading = false; }
+    };
+    window.addEventListener("message", receive);
+    const timeout = setTimeout(() => cleanup("帶入評價逾時。請先完成評價站 Access 登入，再回到詢價頁按一次「帶入評價」。瀏覽器若隔離分頁，也可能阻止傳送。"), 120_000);
+    const closedCheck = setInterval(() => { if (popup.closed) cleanup(); }, 1000);
+  });
+
   function loadAdminController() {
     if (!adminControllerPromise) {
-      adminControllerPromise = import("./backend-admin.mjs?v=performance-modules-v1")
+      adminControllerPromise = import("./backend-admin.mjs?v=lifecycle-table-order-v1")
         .then(({ createAdminController }) => createAdminController({
           request,
           getUser: () => state.user,
@@ -377,7 +500,7 @@
   function closePrivateDialogs() {
     closeRfqProgress();
     [rfqHistoryDialog, adminAccountsDialog, adminRegistrationReviewDialog, adminOutboundDialog,
-      adminTimelinesDialog, issuerPickerDialog].forEach(dialog => {
+      adminTimelinesDialog, adminLifecycleDialog, issuerPickerDialog].forEach(dialog => {
       if (dialog?.open) dialog.close();
     });
   }
@@ -433,6 +556,7 @@
     const isSupport = !!user && (user.role === "ADMIN" || user.role === "PS");
     adminAccountsButton.hidden = !isSupport;
     adminRegistrationsButton.hidden = !isSupport;
+    adminLifecycleButton.hidden = !user;
     adminOutboundButton.hidden = !user || user.role !== "ADMIN";
     adminTimelinesButton.hidden = !user || user.role !== "ADMIN";
     document.querySelector("#backendUser").textContent = user ? `${user.displayName}｜${user.branchName}` : "";
@@ -474,11 +598,16 @@
     CANCELLED: "已取消"
   };
 
-  function setRfqBadge(count) {
-    const value = Math.max(0, Number(count) || 0);
+  function setRfqBadge(activeCount, lateReplyCount = 0) {
+    const active = Math.max(0, Number(activeCount) || 0);
+    const late = Math.max(0, Number(lateReplyCount) || 0);
+    const value = active + late;
+    state.rfqListSummary = { activeCount: active, unrankedLateReplyCount: late };
     rfqBadge.textContent = String(value);
     rfqBadge.hidden = value === 0;
-    myRfqsButton.setAttribute("aria-label", value ? `我的詢價，${value} 筆進行中` : "我的詢價");
+    myRfqsButton.setAttribute("aria-label", value
+      ? `我的詢價，${active} 筆進行中，${late} 筆有晚到報價可重新排名`
+      : "我的詢價");
   }
 
   function currentRfqFromUrl() {
@@ -592,7 +721,9 @@
       const percent = expected > 0 ? Math.min(100, Math.round(terminal / expected * 100)) : 0;
       const underlyings = Array.isArray(rfq.firstTrade?.underlyings) ? rfq.firstTrade.underlyings : [];
       const remainingTrades = Math.max(0, Number(rfq.tradeCount) - 1);
-      const action = activeWorkflowStatuses.has(rfq.workflowStatus) ? "查看進度" : "查看結果";
+      const action = activeWorkflowStatuses.has(rfq.workflowStatus)
+        ? "查看進度"
+        : rfq.hasUnrankedLateReplies ? "查看晚到報價" : "查看結果";
       return `<article class="backend-rfq-card status-${escapeHtml(rfq.workflowStatus.toLowerCase())}">
         <header>
           <div><strong>${escapeHtml(rfq.id)}</strong><small>${escapeHtml(formatDateTime(rfq.createdAt))}</small></div>
@@ -605,6 +736,7 @@
           <span>有效回覆 ${escapeHtml(rfq.validReplyCount)} 家</span>
           ${rfq.readyArtifactCount ? `<span>${escapeHtml(rfq.readyArtifactCount)} 張報價圖</span>` : ""}
         </div>
+        ${rfq.hasUnrankedLateReplies ? '<p class="backend-rfq-late">有晚到報價，可開啟結果並執行版本化重新排名。</p>' : ""}
         ${expected ? `<div class="backend-rfq-progress"><span style="width:${percent}%"></span></div><small>已處理 ${terminal}/${expected} 家發行機構</small>` : ""}
         <footer><span>${escapeHtml(rfqTimingText(rfq))}</span><button type="button" class="primary" data-open-rfq="${escapeHtml(rfq.id)}">${action}</button></footer>
       </article>`;
@@ -624,7 +756,7 @@
       const payload = await request(`/rfqs?${parameters}`);
       state.rfqListItems = append ? state.rfqListItems.concat(payload.rfqs) : payload.rfqs;
       state.rfqListCursor = payload.nextCursor;
-      setRfqBadge(payload.summary.activeCount);
+      setRfqBadge(payload.summary.activeCount, payload.summary.unrankedLateReplyCount);
       rfqLoadMoreButton.hidden = !payload.nextCursor;
       renderRfqHistory();
     } catch (error) {
@@ -638,7 +770,7 @@
     if (!state.user || document.hidden) return;
     try {
       const payload = await request("/rfqs/summary");
-      setRfqBadge(payload.activeCount);
+      setRfqBadge(payload.activeCount, payload.unrankedLateReplyCount);
     } catch {
       setRfqBadge(0);
     } finally {
@@ -651,7 +783,10 @@
     state.rfqId = null;
     if (progressDialog.open) progressDialog.close();
     updateRfqUrl(null);
-    state.rfqListScope = "active";
+    state.rfqListScope = state.rfqListSummary.activeCount === 0
+      && state.rfqListSummary.unrankedLateReplyCount > 0
+      ? "completed"
+      : "active";
     document.querySelectorAll("[data-rfq-scope]").forEach(button => {
       button.setAttribute("aria-selected", String(button.dataset.rfqScope === state.rfqListScope));
     });
@@ -762,6 +897,7 @@
 
   async function submitRfq(issuers) {
     if (!state.user) { showAuth(); return; }
+    if (!validateTradeInputs()) return;
     const kiIssue = kiBarrierIssue();
     if (kiIssue) { statusElement.textContent = kiIssue; statusElement.classList.remove("success"); return; }
     const sendButton = document.querySelector("#sendQuotes");
@@ -805,6 +941,12 @@
       void refreshRfqBadge();
       await refreshResults();
     } catch (error) {
+      if (error.code === "VALIDATION_ERROR" && error.fieldErrors) {
+        if (progressDialog.open) progressDialog.close();
+        const detail = { fieldErrors: error.fieldErrors, message: error.message };
+        document.dispatchEvent(new CustomEvent("fcn:trade-field-errors", { detail }));
+        error.message = detail.message;
+      }
       statusElement.textContent = error.message;
       statusElement.classList.remove("success");
       document.querySelector("#backendCountdown").textContent = `建立失敗：${error.message}`;
@@ -929,11 +1071,211 @@
   }
 
   function quoteActionsHtml(trade, quoteId, artifact, isImageWinner, provisional) {
+    const valuation = !provisional && state.user?.role === "ADMIN" && trade.product === "FCN" && trade.currency === "USD"
+      ? ` <button type="button" class="secondary" data-valuation-trade="${escapeHtml(trade.tradeCode)}" data-valuation-quote="${escapeHtml(quoteId)}">帶入評價</button>` : "";
     return `${artifactLinkHtml(artifact, trade.tradeCode, quoteId, isImageWinner, provisional)}${analysisLinkHtml(
       trade,
       quoteId,
       provisional
-    )}`;
+    )}${valuation}`;
+  }
+
+  // Exactly one term is left blank, and that blank is the question being put to the issuers. It
+  // arrives as null, so any renderer that prints it as an empty cell turns "please price this"
+  // into "this term is missing". Both views route every term through termText for that reason.
+  const TARGET_FIELD_TERM = {
+    COUPON: "couponPaPct",
+    PRICE: "upfrontOrNotePricePct",
+    STRIKE: "strikePct",
+    KO_BARRIER: "koBarrierPct",
+    KI_BARRIER: "kiBarrierPct"
+  };
+  const TARGET_FIELD_LABEL = {
+    COUPON: "Coupon p.a. (%)",
+    PRICE: "Upfront / NotePrice (%)",
+    STRIKE: "Strike (%)",
+    KO_BARRIER: "KO Barrier (%)",
+    KI_BARRIER: "KI Barrier (%)"
+  };
+
+  function targetFieldLabel(targetField) {
+    return TARGET_FIELD_LABEL[targetField] || String(targetField ?? "");
+  }
+
+  function isTargetTerm(key, targetField) {
+    return TARGET_FIELD_TERM[targetField] === key;
+  }
+
+  function termText(terms, key, targetField, suffix = "") {
+    if (isTargetTerm(key, targetField)) return "詢價中";
+    const value = terms?.[key];
+    if (value === null || value === undefined || value === "") return "—";
+    return `${value}${suffix}`;
+  }
+
+  function termCellHtml(terms, key, targetField, suffix = "") {
+    const target = isTargetTerm(key, targetField);
+    const upfront = key === "upfrontOrNotePricePct";
+    const classes = [target ? "term-target" : "", upfront ? "term-upfront" : ""].filter(Boolean).join(" ");
+    return `<td${classes ? ` class="${classes}"` : ""}>${escapeHtml(termText(terms, key, targetField, suffix))}</td>`;
+  }
+
+  // Shown while the issuers are still replying: the requester should be able to read back what was
+  // actually asked -- Upfront first -- without leaving the waiting screen.
+  function termsSummaryHtml(trade) {
+    const terms = trade.terms;
+    if (!terms) return "";
+    const target = trade.targetField;
+    const items = [
+      ["Upfront / NotePrice", termText(terms, "upfrontOrNotePricePct", target, "%"), true],
+      ["Strike", termText(terms, "strikePct", target, "%"), false],
+      ["KO Barrier", termText(terms, "koBarrierPct", target, "%"), false],
+      ["Coupon p.a.", termText(terms, "couponPaPct", target, "%"), false],
+      ["KI Barrier", termText(terms, "kiBarrierPct", target, "%"), false],
+      ["KO Type", terms.koType ?? "—", false],
+      ["Barrier Type", terms.barrierType ?? "—", false],
+      ["Tenor", terms.tenorMonths == null ? "—" : `${terms.tenorMonths} 個月`, false],
+      ["Guaranteed", terms.guaranteedPeriodsMonths == null ? "—" : `${terms.guaranteedPeriodsMonths} 個月`, false],
+      ["Currency", trade.currency ?? "—", false],
+      ["Trade Date", terms.tradeDate ?? "—", false]
+    ];
+    return `<dl class="ranking-terms">${items.map(([label, value, emphasis]) =>
+      `<div${emphasis ? " class=\"is-upfront\"" : ""}><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`
+    ).join("")}</dl>`;
+  }
+
+  function rankCellHtml(trade, rank) {
+    const item = (trade.rankings || []).find(entry => Number(entry.rank) === rank);
+    if (!item) return "<td class=\"rank-cell is-empty\">—</td>";
+    return `<td class="rank-cell"><span class="rank-issuer">${escapeHtml(item.issuerDisplayName)}</span><span class="rank-value">${escapeHtml(String(item.value))}%${item.tie ? "（同價）" : ""}</span></td>`;
+  }
+
+  function tableRankLimit() {
+    const value = Number(state.tableImageRanks);
+    return Number.isInteger(value) && value >= 1 && value <= 4 ? value : 4;
+  }
+
+  // Header and body are generated once and shared by the on-screen table and the exported sheet, so
+  // the image cannot drift from what the reader was looking at. Only the stylesheet differs: the
+  // screen uses the page tokens, the export carries its own inline light palette.
+  function resultsTableMarkup(payload, rankLimit) {
+    // Ranks lead. The trade code still comes first because it is the row's subject -- pushing it
+    // right would leave the leading columns with nothing to belong to -- but everything the reader
+    // opened this view for now sits inside the first screen, with the terms trailing behind it.
+    const ranks = Array.from({ length: rankLimit }, (_, index) => index + 1);
+    const rankHeader = ranks.map(rank => `<th scope="col" class="rank-col">第 ${rank} 名</th>`).join("");
+    const termHeader = [
+      "Product", "Currency", "Trade Date", "Tenor (m)",
+      "BBG 1", "BBG 2", "BBG 3", "BBG 4", "BBG 5",
+      "Strike (%)", "KO Type", "KO Barrier (%)", "Coupon p.a. (%)", "Upfront / NotePrice (%)",
+      "Guaranteed Periods (m)", "Barrier Type", "KI Barrier (%)",
+      "Observation Frequency (m)", "OTC", "Effective Date Offset"
+    ].map(label => `<th scope="col"${label.startsWith("Upfront") ? " class=\"term-upfront\"" : ""}>${escapeHtml(label)}</th>`).join("");
+    const header = `<th scope="col">#</th>${rankHeader}${termHeader}`;
+    const rows = payload.trades.map(trade => {
+      const terms = trade.terms || {};
+      const underlyings = Array.isArray(trade.underlyings) ? trade.underlyings : [];
+      const bbg = [0, 1, 2, 3, 4].map(index => `<td>${escapeHtml(underlyings[index] ?? "—")}</td>`).join("");
+      return `<tr>
+        <th scope="row">${escapeHtml(trade.tradeCode)}</th>
+        ${ranks.map(rank => rankCellHtml(trade, rank)).join("")}
+        <td>${escapeHtml(trade.product ?? "—")}</td>
+        <td>${escapeHtml(trade.currency ?? "—")}</td>
+        <td>${escapeHtml(terms.tradeDate ?? "—")}</td>
+        <td>${escapeHtml(terms.tenorMonths == null ? "—" : String(terms.tenorMonths))}</td>
+        ${bbg}
+        ${termCellHtml(terms, "strikePct", trade.targetField, "%")}
+        <td>${escapeHtml(terms.koType ?? "—")}</td>
+        ${termCellHtml(terms, "koBarrierPct", trade.targetField, "%")}
+        ${termCellHtml(terms, "couponPaPct", trade.targetField, "%")}
+        ${termCellHtml(terms, "upfrontOrNotePricePct", trade.targetField, "%")}
+        <td>${escapeHtml(terms.guaranteedPeriodsMonths == null ? "—" : String(terms.guaranteedPeriodsMonths))}</td>
+        <td>${escapeHtml(terms.barrierType ?? "—")}</td>
+        ${termCellHtml(terms, "kiBarrierPct", trade.targetField, "%")}
+        <td>${escapeHtml(terms.observationFrequencyMonths == null ? "—" : String(terms.observationFrequencyMonths))}</td>
+        <td>${escapeHtml(terms.otc ?? "—")}</td>
+        <td>${escapeHtml(terms.effectiveDateOffsetCalendarDays == null ? "—" : String(terms.effectiveDateOffsetCalendarDays))}</td>
+      </tr>`;
+    }).join("");
+    return `<table class="ranking-table"><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  // The row view still carries no per-quote actions: the custom fifth choice, the single-issuer
+  // quote card and the market/risk link stay in the card view, which is the only place they were
+  // ever authorized. The table export is different in kind -- it re-renders the results payload this
+  // browser already received and is already showing, so it authorizes nothing new and calls no
+  // endpoint. It follows the card rule in artifactLinkHtml that no image exists while the ranking is
+  // still provisional.
+  function renderResultsTableHtml(payload, provisional) {
+    if (!payload.trades.length) return "<p>目前沒有交易。</p>";
+    const rankLimit = tableRankLimit();
+    const exportControls = provisional
+      ? ""
+      : `<div class="ranking-table-actions">
+          <label for="tableImageRanks">保留名次</label>
+          <select id="tableImageRanks" data-table-image-ranks>${[1, 2, 3, 4]
+            .map(rank => `<option value="${rank}"${rank === rankLimit ? " selected" : ""}>前 ${rank} 名</option>`)
+            .join("")}</select>
+          <button type="button" class="secondary" data-table-image${state.hasRankings ? "" : " disabled"}>產出表格圖</button>
+          <span class="ranking-table-hint">名次同時套用到畫面表格與表格圖，表格圖含所有欄位。</span>
+        </div>`;
+    return `<p class="ranking-table-note">${provisional
+      ? "暫定排名，回覆期間內仍可能變動；正式排名後才能產出表格圖。"
+      : "正式排名。"}第 5 名（自選）、單一發行機構報價圖與市場分析請切換回「卡片」檢視。<span class="ranking-table-hint">「詢價中」代表該欄位刻意留白，是本次要求發行機構報價的欄位。</span></p>
+      ${exportControls}
+      <div class="ranking-table-scroll">${resultsTableMarkup(payload, rankLimit)}</div>`;
+  }
+
+  // A complete standalone document. The page stylesheet is not loaded inside the render iframe, so
+  // the export cannot inherit the dark theme however the viewer set the picker -- the same guarantee
+  // styles-dark.css gives the card sheet through pinning rules, obtained here by isolation instead.
+  // The literal px sizes are the ADR 0042 exception for a PNG render surface: a token change must
+  // never alter an image already sent to a client. Colours are the opaque equivalents of the light
+  // tokens, because html2canvas composites translucent values unpredictably.
+  function tableSheetDocument() {
+    const rfq = state.latestResultsRfq;
+    const trades = state.latestResultTrades;
+    if (!rfq || !Array.isArray(trades) || !trades.length) return null;
+    if (rfq.isProvisional || !state.hasRankings) return null;
+    const rankLimit = tableRankLimit();
+    const generatedAt = new Date();
+    const datePart = `${generatedAt.getFullYear()}${String(generatedAt.getMonth() + 1).padStart(2, "0")}${String(generatedAt.getDate()).padStart(2, "0")}`;
+    const reference = String(state.rfqId ?? "rfq");
+    const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8"><style>
+*{box-sizing:border-box}
+body{margin:0;padding:34px;width:max-content;min-width:900px;background:#ffffff;color:#1c1c1e;font-family:Arial,"Microsoft JhengHei",sans-serif}
+.sheet-head{display:flex;align-items:flex-end;justify-content:space-between;gap:48px;padding-bottom:18px;border-bottom:4px solid #2a6f78}
+.sheet-head p{margin:0 0 6px;color:#06626e;font-size:15px;font-weight:bold;letter-spacing:.12em}
+.sheet-head h1{margin:0;color:#2a6f78;font-size:32px;letter-spacing:.02em}
+.sheet-meta{text-align:right;color:#6d6d72;font-size:15px;line-height:1.65}
+.sheet-meta strong{display:block;color:#1c1c1e;font-size:19px}
+.ranking-table{margin-top:22px;border-collapse:separate;border-spacing:0;font-size:15px;white-space:nowrap}
+.ranking-table th,.ranking-table td{padding:10px 14px;border-bottom:1px solid #dcdcdd;text-align:left}
+.ranking-table thead th{background:#2a6f78;color:#ffffff;font-weight:700}
+.ranking-table thead .rank-col{background:#0a7c8a}
+.ranking-table thead .term-upfront{background:#06626e;color:#ffffff}
+.ranking-table tbody th{background:#f2f7f8;font-weight:700}
+.ranking-table tbody tr:last-child th,.ranking-table tbody tr:last-child td{border-bottom:0}
+.ranking-table .term-upfront{background:#e4f2f4;font-weight:700}
+.ranking-table .term-target{color:#06626e;font-style:italic}
+.ranking-table .rank-cell{min-width:132px}
+.ranking-table .rank-cell.is-empty{color:#c4c4c6}
+.ranking-table .rank-issuer{display:block;font-weight:700;color:#1c1c1e}
+.ranking-table .rank-value{display:block;color:#6d6d72}
+.sheet-foot{margin-top:20px;color:#6d6d72;font-size:14px;line-height:1.6}
+</style></head><body>
+<header class="sheet-head">
+<div><p>FCN / DAC RANKING SUMMARY</p><h1>比價結果總表</h1></div>
+<div class="sheet-meta"><strong>${escapeHtml(reference)}</strong>${escapeHtml(generatedAt.toLocaleString("zh-TW", { hour12: false }))}<br>前 ${rankLimit} 名｜${trades.length} 筆交易</div>
+</header>
+${resultsTableMarkup({ trades }, rankLimit)}
+<p class="sheet-foot">正式排名。本表僅供參考，最終條件以發行機構正式報價及相關文件為準。</p>
+</body></html>`;
+    return {
+      html,
+      width: 1200,
+      filename: `FCN-Ranking-${reference.replace(/[^\w.-]+/gu, "-")}-top${rankLimit}-${datePart}.png`
+    };
   }
 
   function renderResults(payload, artifactByQuote = {}) {
@@ -946,6 +1288,11 @@
     const banner = provisional
       ? "<p id=\"backendProvisionalBanner\" class=\"backend-provisional\"></p>"
       : "";
+    if (state.resultsView === "table") {
+      document.querySelector("#backendRankings").innerHTML = banner + renderResultsTableHtml(payload, provisional);
+      updateProvisionalBanner();
+      return;
+    }
     document.querySelector("#backendRankings").innerHTML = banner + payload.trades.map(trade => {
       const alternates = Array.isArray(trade.alternateQuotes) ? trade.alternateQuotes : [];
       const previousSelection = state.customFifthSelections[trade.tradeCode];
@@ -968,7 +1315,8 @@
           </tr>`
         : `<tr class="custom-fifth-row"><td>5（自選）</td><td colspan="3">目前沒有前四名以外的有效發行機構報價。</td></tr>`;
       return `
-      <section class="ranking-card"><h3>${escapeHtml(trade.tradeCode)} · ${escapeHtml(trade.underlyings.join(" / "))} <small>${escapeHtml(trade.targetField)}｜${provisional ? `有效 ${trade.validQuoteCount} 家${trade.lastUpdatedAt ? `｜更新 ${escapeHtml(formatDateTime(trade.lastUpdatedAt))}` : ""}` : "正式結果"}</small></h3>
+      <section class="ranking-card"><h3>${escapeHtml(trade.tradeCode)} · ${escapeHtml(trade.underlyings.join(" / "))} <small>詢價 ${escapeHtml(targetFieldLabel(trade.targetField))}｜${provisional ? `有效 ${trade.validQuoteCount} 家${trade.lastUpdatedAt ? `｜更新 ${escapeHtml(formatDateTime(trade.lastUpdatedAt))}` : ""}` : "正式結果"}</small></h3>
+      ${termsSummaryHtml(trade)}
       ${trade.rankings.length ? `<table><thead><tr><th>名次</th><th>發行機構</th><th>報價</th><th>時間</th></tr></thead><tbody>${trade.rankings.map(item => {
         const link = quoteActionsHtml(
           trade,
@@ -1098,6 +1446,7 @@
     const kiIssue = kiBarrierIssue();
     if (kiIssue) { statusElement.textContent = kiIssue; statusElement.classList.remove("success"); return; }
     issuerPickerError.textContent = "";
+    refreshFastIssuerPresetButton();
     updateIssuerPickerSummary();
     if (!issuerPickerDialog.open) issuerPickerDialog.showModal();
   }
@@ -1106,6 +1455,33 @@
     BNP: "BMJB", MS: "BMJB", JPM: "BMJB", BARCLAYS: "BMJB",
     NOMURA: "NOMURA", UBS: "UBS", DBS: "DBS", SG: "SG", CITI: "CITI", GS: "GS", CA: "CA"
   };
+  const fastIssuerPresetKey = "fcn-rfq-fast-issuers-v1";
+
+  function readFastIssuerPreset() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(fastIssuerPresetKey) || "[]");
+      const allowed = new Set(issuerPickItems.map(item => item.value));
+      const preset = Array.isArray(parsed) ? parsed.filter(value => allowed.has(value)) : [];
+      return preset.length >= 1 && preset.length <= 3 ? [...new Set(preset)] : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function setIssuerSelection(selected) {
+    const selectedSet = new Set(selected);
+    issuerPickItems.forEach(item => { item.checked = selectedSet.has(item.value); });
+    issuerPickAll.checked = issuerPickItems.every(item => item.checked);
+    updateIssuerPickerSummary();
+  }
+
+  function refreshFastIssuerPresetButton() {
+    const preset = readFastIssuerPreset();
+    issuerFastApply.hidden = preset.length === 0;
+    issuerFastApply.textContent = preset.length
+      ? `套用我的快速組合（${preset.join("／")}）`
+      : "套用我的快速組合";
+  }
 
   function updateIssuerPickerSummary() {
     const selected = issuerPickItems.filter(item => item.checked).map(item => item.value);
@@ -1117,9 +1493,16 @@
       : "系統收到全部回覆會立即完成；否則保留原有 15 分鐘等待與 60 秒郵件轉送緩衝。";
   }
 
+  function validateTradeInputs() {
+    const detail = { error: null };
+    document.dispatchEvent(new CustomEvent("fcn:validate-trades", { detail }));
+    return !detail.error;
+  }
+
   document.addEventListener("click", event => {
     if (event.target.closest("#sendQuotes")) {
-      event.preventDefault(); event.stopImmediatePropagation(); openIssuerPicker();
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (validateTradeInputs()) openIssuerPicker();
     }
   }, true);
   issuerPickAll.addEventListener("change", () => {
@@ -1130,6 +1513,29 @@
     issuerPickAll.checked = issuerPickItems.every(entry => entry.checked);
     updateIssuerPickerSummary();
   }));
+  issuerFastStart.addEventListener("click", () => {
+    issuerPickerError.textContent = "請勾選 1～3 家發行機構；系統不會代替你決定機構。";
+    setIssuerSelection([]);
+    issuerPickItems[0]?.focus();
+  });
+  issuerFastApply.addEventListener("click", () => {
+    issuerPickerError.textContent = "";
+    setIssuerSelection(readFastIssuerPreset());
+  });
+  issuerFastSave.addEventListener("click", () => {
+    const selected = issuerPickItems.filter(item => item.checked).map(item => item.value);
+    if (selected.length < 1 || selected.length > 3) {
+      issuerPickerError.textContent = "快速組合必須包含 1～3 家發行機構。";
+      return;
+    }
+    try {
+      localStorage.setItem(fastIssuerPresetKey, JSON.stringify(selected));
+      issuerPickerError.textContent = `已儲存快速組合：${selected.join("／")}。`;
+      refreshFastIssuerPresetButton();
+    } catch {
+      issuerPickerError.textContent = "瀏覽器禁止儲存設定，本次仍可直接送出詢價。";
+    }
+  });
   document.querySelector("#cancelIssuerPicker").addEventListener("click", () => issuerPickerDialog.close());
   issuerPickerForm.addEventListener("submit", event => {
     event.preventDefault();
@@ -1139,9 +1545,12 @@
     submitRfq(selected);
   });
   document.querySelector("#backendRankings").addEventListener("click", requestArtifactFromButton);
+  document.querySelector("#backendRankings").addEventListener("click", requestTableImageFromButton);
   document.querySelector("#backendRankings").addEventListener("change", event => {
     const select = event.target.closest("[data-custom-fifth-select]");
     if (select) updateCustomFifthSelection(select);
+    const rankSelect = event.target.closest("[data-table-image-ranks]");
+    if (rankSelect) applyTableRankLimit(rankSelect);
   });
   artifactContainer.addEventListener("click", requestArtifactFromButton);
   loginForm.addEventListener("submit", async event => {
@@ -1282,6 +1691,38 @@
     showAuthPanel("login");
     showAuth();
   });
+  const resultsViewKey = "fcn-quote-app.results-view.v1";
+
+  function applyResultsView(view, { rerender = true } = {}) {
+    state.resultsView = view === "table" ? "table" : "cards";
+    document.querySelectorAll("#backendResultsView button").forEach(button => {
+      button.setAttribute("aria-pressed", String(button.dataset.resultsView === state.resultsView));
+    });
+    try {
+      localStorage.setItem(resultsViewKey, state.resultsView);
+    } catch (error) {
+      /* Private mode: the choice simply does not survive the session. */
+    }
+    // Re-render from the last payload rather than refetching; the poll owns the network.
+    if (rerender && state.latestResultsRfq) {
+      renderResults(
+        { rfq: state.latestResultsRfq, trades: state.latestResultTrades },
+        state.artifactByQuote
+      );
+    }
+  }
+
+  try {
+    const storedResultsView = localStorage.getItem(resultsViewKey);
+    if (storedResultsView === "table" || storedResultsView === "cards") state.resultsView = storedResultsView;
+  } catch (error) {
+    /* Keep the card default. */
+  }
+  applyResultsView(state.resultsView, { rerender: false });
+  document.querySelector("#backendResultsView").addEventListener("click", event => {
+    const button = event.target.closest("[data-results-view]");
+    if (button) applyResultsView(button.dataset.resultsView);
+  });
   document.querySelector("#closeBackendProgress").addEventListener("click", () => closeRfqProgress());
   progressDialog.addEventListener("cancel", event => {
     event.preventDefault();
@@ -1342,6 +1783,7 @@
   adminOutboundButton.addEventListener("click", () => openAdminFeature("openOutboundArchive"));
   adminTimelinesButton.addEventListener("click", () => openAdminFeature("openTimelines"));
   adminAccountsButton.addEventListener("click", () => openAdminFeature("openAccounts"));
+  adminLifecycleButton.addEventListener("click", () => openAdminFeature("openLifecycleProducts"));
   addEventListener("popstate", () => {
     const analysis = currentAnalysisFromUrl();
     if (analysis && state.user) {

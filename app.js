@@ -56,6 +56,94 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
   let issuerDialogMode = "download";
   let emailQueue = [];
   let emailQueueIndex = -1;
+
+  /**
+   * The mail queue survives a reload.
+   *
+   * This is the one piece of state whose loss has consequences outside the browser: the operator
+   * sends up to eight separate emails by hand, and a reload at email five used to reset the counter
+   * with no way to tell which issuers had already received one. Sending again is not free — the
+   * issuer receives a duplicate RFQ.
+   *
+   * The built payloads are stored, not the institution keys, so a resumed run sends exactly what
+   * the earlier emails contained even if the table has since been edited. Rebuilding from the
+   * current table would silently make email six disagree with emails one to five.
+   */
+  const MAIL_QUEUE_STORAGE_KEY = "fcn-quote-app.mail-queue.v1";
+
+  function saveMailQueue() {
+    try {
+      if (!emailQueue.length || emailQueueIndex < 0) {
+        window.localStorage.removeItem(MAIL_QUEUE_STORAGE_KEY);
+        return;
+      }
+      window.localStorage.setItem(MAIL_QUEUE_STORAGE_KEY, JSON.stringify({
+        version: 1, queue: emailQueue, index: emailQueueIndex, savedAt: Date.now()
+      }));
+    } catch {
+      // Storage full or blocked. The flow still works; only its resumability is lost, and saying so
+      // is better than letting the operator believe the progress is safe.
+      setStatus("瀏覽器無法保存寄送進度；若中途重新整理將無法接續。");
+    }
+  }
+
+  /**
+   * Offers to resume an interrupted send on load, as a banner rather than a modal.
+   *
+   * A dialog that opens by itself before the operator has looked at the page gets dismissed on
+   * reflex, and dismissing this one silently discards the thing it was protecting. A banner waits.
+   */
+  function offerMailQueueResume() {
+    const saved = readSavedMailQueue();
+    if (!saved) return;
+
+    const bar = document.createElement("div");
+    bar.className = "resume-bar";
+    bar.setAttribute("role", "status");
+
+    const text = document.createElement("span");
+    const done = saved.index;
+    text.textContent = `上次的詢價郵件流程停在第 ${saved.index + 1} / ${saved.queue.length} 封`
+      + (done ? `，前 ${done} 封已寄出。` : "。");
+
+    const resume = document.createElement("button");
+    resume.type = "button";
+    resume.className = "resume-bar-action";
+    resume.textContent = "接續寄送";
+    resume.addEventListener("click", async () => {
+      emailQueue = saved.queue;
+      emailQueueIndex = saved.index;
+      bar.remove();
+      zimbraUrlInput.value = storedZimbraUrl();
+      try { await prepareQueuedEmail(); } catch (error) { setStatus(error.message); }
+    });
+
+    const discard = document.createElement("button");
+    discard.type = "button";
+    discard.className = "resume-bar-dismiss";
+    discard.textContent = "放棄這次流程";
+    discard.addEventListener("click", () => {
+      emailQueue = [];
+      emailQueueIndex = -1;
+      saveMailQueue();
+      bar.remove();
+      setStatus("已放棄上次未完成的詢價郵件流程。", true);
+    });
+
+    bar.append(text, resume, discard);
+    status.insertAdjacentElement("afterend", bar);
+  }
+
+  function readSavedMailQueue() {
+    try {
+      const raw = window.localStorage.getItem(MAIL_QUEUE_STORAGE_KEY);
+      if (!raw) return null;
+      const saved = JSON.parse(raw);
+      if (saved?.version !== 1 || !Array.isArray(saved.queue) || !saved.queue.length) return null;
+      if (!Number.isInteger(saved.index) || saved.index < 0 || saved.index >= saved.queue.length) return null;
+      return saved;
+    } catch { return null; }
+  }
   let emailClipboardFormat = "none";
   let rowChangeTimer = 0;
   let bbgLookupPromise = null;
@@ -165,6 +253,79 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
   function setStatus(message = "", success = false) {
     status.textContent = message;
     status.classList.toggle("success", success);
+  }
+
+  /**
+   * Single-level undo for the two controls that destroy work.
+   *
+   * An undo rather than a confirmation dialog on purpose. 刪除最後一筆 is a frequent, deliberate
+   * action; putting a confirm in front of it slows down every correct use to guard against the rare
+   * wrong one, and trains people to dismiss confirmations without reading them. Letting the action
+   * happen and offering to take it back costs the careful user nothing.
+   *
+   * One level, not a stack: it covers the mis-click, which is the actual failure, and a deeper
+   * history would imply a guarantee the page cannot keep across a reload.
+   */
+  const UNDO_WINDOW_MS = 12000;
+  let undoTimer = null;
+
+  function undoBar() {
+    let bar = document.querySelector("#undoBar");
+    if (bar) return bar;
+    bar = document.createElement("div");
+    bar.id = "undoBar";
+    bar.className = "undo-bar";
+    bar.setAttribute("role", "status");
+    bar.hidden = true;
+    status.insertAdjacentElement("afterend", bar);
+    return bar;
+  }
+
+  function dismissUndo() {
+    clearTimeout(undoTimer);
+    const bar = document.querySelector("#undoBar");
+    if (bar) { bar.hidden = true; bar.replaceChildren(); }
+  }
+
+  function offerUndo(message, restore) {
+    const bar = undoBar();
+    clearTimeout(undoTimer);
+    const text = document.createElement("span");
+    text.textContent = message;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "undo-bar-action";
+    button.textContent = "復原";
+    button.addEventListener("click", () => {
+      dismissUndo();
+      restore();
+    });
+    bar.replaceChildren(text, button);
+    bar.hidden = false;
+    undoTimer = setTimeout(dismissUndo, UNDO_WINDOW_MS);
+  }
+
+  /** Every field of every row, in order — enough to put the table back exactly as it was. */
+  function snapshotRows() {
+    return [...tableBody.rows].map(row => Object.fromEntries(
+      fields.map(([name]) => [name, rowField(row, name).value])
+    ));
+  }
+
+  function restoreRows(rows) {
+    tableBody.replaceChildren();
+    rows.forEach(values => {
+      createRow();
+      const row = tableBody.lastElementChild;
+      Object.entries(values).forEach(([name, value]) => {
+        const field = rowField(row, name);
+        if (field) field.value = value;
+      });
+      decorateRow(row);
+    });
+    if (!tableBody.rows.length) createRow();
+    renumberRows();
+    saveDraft();
   }
 
   function normalizedStaticIdentity(branchName, employeeNumber) {
@@ -466,15 +627,65 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
     return /^Daily/i.test(value) ? "TRUE" : "FALSE";
   }
 
+  const fieldLabel = name => fields.find(([key]) => key === name)?.[1] || name;
+  let validationMessage = "";
+
+  function clearFieldErrors(root = tableBody) {
+    root.querySelectorAll(".field-error").forEach(el => {
+      const field = el.parentElement.querySelector("input, select");
+      if (field) {
+        const remaining = (field.getAttribute("aria-describedby") || "").split(/\s+/).filter(id => id && id !== el.id);
+        if (remaining.length) field.setAttribute("aria-describedby", remaining.join(" "));
+        else field.removeAttribute("aria-describedby");
+        field.removeAttribute("aria-invalid");
+      }
+      el.remove();
+    });
+    root.querySelectorAll(".invalid").forEach(el => el.classList.remove("invalid"));
+    root.querySelectorAll(".validation-reveal").forEach(el => el.classList.remove("validation-reveal"));
+  }
+
+  function showFieldError(row, names, message, focus = true) {
+    const uniqueNames = [...new Set(Array.isArray(names) ? names : [names])];
+    const sequence = [...tableBody.rows].indexOf(row) + 1;
+    const fullMessage = `第 ${sequence} 筆交易｜${uniqueNames.map(fieldLabel).join("、")}：${message}`;
+    uniqueNames.forEach(name => {
+      const field = rowField(row, name);
+      if (!field) return;
+      const cell = field.closest("td");
+      cell.classList.add("validation-reveal");
+      field.classList.add("invalid");
+      field.setAttribute("aria-invalid", "true");
+      let hint = cell.querySelector(".field-error");
+      if (!hint) {
+        hint = document.createElement("span");
+        hint.className = "field-error";
+        hint.id = `trade-error-${sequence}-${name}`;
+        field.parentElement.append(hint);
+        const describedBy = field.getAttribute("aria-describedby");
+        field.setAttribute("aria-describedby", [describedBy, hint.id].filter(Boolean).join(" "));
+      }
+      hint.textContent = fullMessage;
+    });
+    if (focus) {
+      // A modal makes the trade inputs inert. Close only the static issuer picker here;
+      // the backend caller closes its progress dialog before displaying server errors.
+      if (emailIssuerDialog.open) emailIssuerDialog.close();
+      setActiveTrade(sequence - 1);
+      const field = rowField(row, uniqueNames[0]);
+      field?.focus({ preventScroll: true });
+      field?.closest("td").scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+    }
+    return fullMessage;
+  }
+
   function markInvalid(row, name, message) {
-    const field = rowField(row, name);
-    field.classList.add("invalid");
-    field.focus({ preventScroll: false });
-    throw new Error(`第 ${row.rowIndex} 筆：${message}`);
+    validationMessage = showFieldError(row, name, message);
+    throw new Error(validationMessage);
   }
 
   function validateRow(row) {
-    row.querySelectorAll(".invalid").forEach(el => el.classList.remove("invalid"));
+    clearFieldErrors(row);
     const get = name => rowValue(row, name);
     const number = name => Number(get(name));
     const required = ["product", "currency", "guaranteedPeriods", "koType", "tenor", "barrierType", "tradeDate"];
@@ -501,14 +712,17 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
     const quoteFields = get("barrierType") === "NONE"
       ? ["strike", "koBarrier", "coupon", "upfront"]
       : ["strike", "koBarrier", "coupon", "upfront", "kiBarrier"];
-    if (quoteFields.filter(name => !get(name)).length !== 1) {
-      markInvalid(row, quoteFields[0], "價格相關欄位必須且只能留一欄空白求值。");
+    const blanks = quoteFields.filter(name => !get(name));
+    if (blanks.length !== 1) {
+      markInvalid(row, blanks.length ? blanks : quoteFields, blanks.length
+        ? `目前有 ${blanks.length} 欄空白；請只保留一欄求值，其餘填入條件。`
+        : "目前沒有空白求值欄；請將其中一欄留白求值。");
     }
   }
 
   // 產圖僅驗證資料完整性與數值範圍；價格求值的留白規則只在寄送詢價時檢查。
   function validateRowForQuoteImage(row) {
-    row.querySelectorAll(".invalid").forEach(el => el.classList.remove("invalid"));
+    clearFieldErrors(row);
     const get = name => rowValue(row, name);
     const number = name => Number(get(name));
     const required = ["product", "currency", "guaranteedPeriods", "koType", "tenor", "barrierType", "tradeDate"];
@@ -798,11 +1012,52 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
   }
 
   function validatedMailRows() {
+    clearFieldErrors();
     const rows = [...tableBody.rows];
     if (rows.length < 1 || rows.length > MAX_ROWS) throw new Error("詢價交易筆數必須介於 1 至 20 筆。");
     rows.forEach(validateRow);
     return rows;
   }
+
+  // Synchronous bridge: the static and authenticated send flows use the same field UI.
+  // No backend module is loaded by the static website.
+  document.addEventListener("fcn:validate-trades", event => {
+    try { validatedMailRows(); }
+    catch (error) { event.detail.error = error.message; setStatus(error.message); }
+  });
+  document.addEventListener("fcn:trade-field-errors", event => {
+    clearFieldErrors();
+    const mapping = {
+      product: "product", currency: "currency", tradeDate: "tradeDate", tenorMonths: "tenor",
+      guaranteedPeriodsMonths: "guaranteedPeriods", strikePct: "strike", koType: "koType",
+      koBarrierPct: "koBarrier", couponPaPct: "coupon", upfrontOrNotePricePct: "upfront",
+      barrierType: "barrierType", kiBarrierPct: "kiBarrier", observationFrequencyMonths: "observationFrequency",
+      effectiveDateOffsetCalendarDays: "effectiveDateOffset", otc: "otc",
+    };
+    const messages = [];
+    for (const [path, reason] of Object.entries(event.detail.fieldErrors || {})) {
+      if (typeof reason !== "string") continue;
+      const match = /^trades\.(\d+)(?:\.([A-Za-z]+)(?:\.(\d+))?)?$/.exec(path);
+      const row = match && tableBody.rows[Number(match[1])];
+      if (!row) { messages.push(reason.trim()); continue; }
+      let names = mapping[match[2]] ? [mapping[match[2]]] : [];
+      if (match[2] === "underlyings") {
+        // The API receives a compact array: a gap in BBG Code 2 must not shift the error to it.
+        const filled = [1, 2, 3, 4, 5].map(n => `bbgCode${n}`).filter(name => rowValue(row, name));
+        names = match[3] !== undefined ? [filled[Number(match[3])] || "bbgCode1"] : filled.length ? filled : ["bbgCode1"];
+      }
+      if (!names.length) {
+        names = rowValue(row, "barrierType") === "NONE"
+          ? ["strike", "koBarrier", "coupon", "upfront"] : ["strike", "koBarrier", "coupon", "upfront", "kiBarrier"];
+      }
+      messages.push(showFieldError(row, names, reason.trim(), messages.length === 0));
+    }
+    if (messages.length) {
+      validationMessage = messages.join("\n");
+      event.detail.message = validationMessage;
+      setStatus(validationMessage);
+    }
+  });
 
   function currentEmailPayload() {
     return emailQueue[emailQueueIndex] ?? null;
@@ -894,9 +1149,21 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
   });
   document.querySelector("#removeRow").addEventListener("click", () => {
     if (tableBody.rows.length <= 1) return setStatus("至少需保留 1 筆詢價交易。");
+    const before = snapshotRows();
     tableBody.lastElementChild.remove(); renumberRows(); saveDraft(); setStatus();
+    offerUndo(`已刪除第 ${before.length} 筆交易。`, () => {
+      restoreRows(before);
+      setStatus(`已復原第 ${before.length} 筆交易。`, true);
+    });
   });
-  document.querySelector("#clearSavedDraft").addEventListener("click", clearSavedDraft);
+  document.querySelector("#clearSavedDraft").addEventListener("click", () => {
+    const before = snapshotRows();
+    clearSavedDraft();
+    offerUndo(`已清除 ${before.length} 筆交易與本機暫存。`, () => {
+      restoreRows(before);
+      setStatus("已復原清除前的交易資料。", true);
+    });
+  });
   document.querySelector("#confirmAllQuotes").addEventListener("click", showMailIssuerDialog);
   document.querySelector("#sendQuotes").addEventListener("click", showMailIssuerDialog);
   document.querySelector("#cancelEmailIssuer").addEventListener("click", () => emailIssuerDialog.close());
@@ -910,6 +1177,7 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
         ? SHARED_MAIL_INSTITUTION_ORDER.map(key => buildInstitutionEmail(key, rows))
         : [buildInstitutionEmail(selection, rows)];
       emailQueueIndex = 0;
+      saveMailQueue();
       zimbraUrlInput.value = storedZimbraUrl();
       await prepareQueuedEmail();
     } catch (error) { setStatus(error.message); }
@@ -925,6 +1193,7 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
   document.querySelector("#cancelEmailQueue").addEventListener("click", () => {
     emailQueue = [];
     emailQueueIndex = -1;
+    saveMailQueue();
     emailQueueDialog.close();
     setStatus("已結束全部詢價郵件流程。", true);
   });
@@ -932,11 +1201,13 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
     if (emailQueueIndex >= emailQueue.length - 1) {
       emailQueue = [];
       emailQueueIndex = -1;
+      saveMailQueue();
       emailQueueDialog.close();
       setStatus("八封詢價郵件已依序準備完成。", true);
       return;
     }
     emailQueueIndex += 1;
+    saveMailQueue();
     try { await prepareQueuedEmail(); } catch (error) { setStatus(error.message); }
   });
   document.querySelector("#generateQuoteImage").addEventListener("click", () => {
@@ -974,6 +1245,12 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
   // Doing that on each keystroke makes typing visibly laggy once the table has many rows and the
   // preview panel is open, so coalesce the work; leaving a field still flushes it immediately.
   ["input", "change"].forEach(eventName => tableBody.addEventListener(eventName, scheduleRowChanges));
+  ["input", "change"].forEach(eventName => tableBody.addEventListener(eventName, event => {
+    const row = event.target.closest("tr");
+    if (!row) return;
+    clearFieldErrors(row);
+    if (validationMessage && status.textContent === validationMessage) setStatus("條件已修改，請再次點擊發送詢價條件進行檢核。");
+  }));
   tradeShortcuts?.addEventListener("click", event => {
     const button = event.target.closest(".trade-shortcut");
     if (!button) return;
@@ -1096,4 +1373,5 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
   if (!restoreDraft()) createRow();
   setupStaticIdentity();
   scheduleTradeViewportSync();
+  offerMailQueueResume();
 })();

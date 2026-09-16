@@ -31,7 +31,7 @@ th, td { border-color: var(--line); }
 /* Filled surfaces use a deeper teal so white text still passes AA (4.92:1), instead of putting
    near-black text on a bright fill. The bright accent stays for text and borders on dark. */
 button { background: #0a7c8a; color: #fff; }
-button:hover { background: #0e93a3; color: #fff; }
+@media (hover:hover) and (pointer:fine){button:hover{ background: #0e93a3; color: #fff; }}
 button.secondary, .back-link { background: var(--accent-soft); color: var(--accent-strong); }
 .official-board-link { color: var(--accent-strong); }
 .form-error { color: #ff8b85; }
@@ -55,4 +55,4 @@ button.secondary {
   border: 1px solid #48484a;
   color: var(--accent-strong);
 }
-button.secondary:hover { background: #3a3a3c; border-color: #5a5a5e; }
+@media (hover:hover) and (pointer:fine){button.secondary:hover{ background: #3a3a3c; border-color: #5a5a5e; }}
