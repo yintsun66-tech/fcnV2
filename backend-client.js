@@ -1158,43 +1158,60 @@
   // Header and body are generated once and shared by the on-screen table and the exported sheet, so
   // the image cannot drift from what the reader was looking at. Only the stylesheet differs: the
   // screen uses the page tokens, the export carries its own inline light palette.
-  function resultsTableMarkup(payload, rankLimit) {
+  // Each column keeps its label and its cell renderer in one entry, so a column cannot be dropped
+  // from the header and left behind in the body. That matters because the export omits some of
+  // these while the screen shows them all.
+  const TERM_COLUMNS = [
+    { label: "Product", cell: trade => `<td>${escapeHtml(trade.product ?? "—")}</td>` },
+    { label: "Currency", cell: trade => `<td>${escapeHtml(trade.currency ?? "—")}</td>` },
+    { label: "Trade Date", cell: (trade, terms) => `<td>${escapeHtml(terms.tradeDate ?? "—")}</td>` },
+    { label: "Tenor (m)", cell: (trade, terms) => `<td>${escapeHtml(terms.tenorMonths == null ? "—" : String(terms.tenorMonths))}</td>` },
+    ...[0, 1, 2, 3, 4].map(index => ({
+      label: `BBG ${index + 1}`,
+      cell: (trade, terms, underlyings) => `<td>${escapeHtml(underlyings[index] ?? "—")}</td>`
+    })),
+    { label: "Strike (%)", cell: (trade, terms) => termCellHtml(terms, "strikePct", trade.targetField, "%") },
+    { label: "KO Type", cell: (trade, terms) => `<td>${escapeHtml(terms.koType ?? "—")}</td>` },
+    { label: "KO Barrier (%)", cell: (trade, terms) => termCellHtml(terms, "koBarrierPct", trade.targetField, "%") },
+    { label: "Coupon p.a. (%)", cell: (trade, terms) => termCellHtml(terms, "couponPaPct", trade.targetField, "%") },
+    { label: "Upfront / NotePrice (%)", cell: (trade, terms) => termCellHtml(terms, "upfrontOrNotePricePct", trade.targetField, "%") },
+    { label: "Guaranteed Periods (m)", cell: (trade, terms) => `<td>${escapeHtml(terms.guaranteedPeriodsMonths == null ? "—" : String(terms.guaranteedPeriodsMonths))}</td>` },
+    { label: "Barrier Type", cell: (trade, terms) => `<td>${escapeHtml(terms.barrierType ?? "—")}</td>` },
+    { label: "KI Barrier (%)", cell: (trade, terms) => termCellHtml(terms, "kiBarrierPct", trade.targetField, "%") },
+    { label: "Observation Frequency (m)", cell: (trade, terms) => `<td>${escapeHtml(terms.observationFrequencyMonths == null ? "—" : String(terms.observationFrequencyMonths))}</td>` },
+    { label: "OTC", cell: (trade, terms) => `<td>${escapeHtml(terms.otc ?? "—")}</td>` },
+    { label: "Effective Date Offset", cell: (trade, terms) => `<td>${escapeHtml(terms.effectiveDateOffsetCalendarDays == null ? "—" : String(terms.effectiveDateOffsetCalendarDays))}</td>` }
+  ];
+
+  // Dropped from the picture only. Observation Frequency, OTC and Effective Date Offset are fixed
+  // values, so in an image they spend width without telling the reader anything; Upfront is left
+  // out at the desk's request. The screen keeps all of them, where scrolling is free and the
+  // requester may still want to confirm what was sent.
+  const SHEET_OMITTED_COLUMNS = new Set([
+    "Upfront / NotePrice (%)",
+    "Observation Frequency (m)",
+    "OTC",
+    "Effective Date Offset"
+  ]);
+
+  function resultsTableMarkup(payload, rankLimit, omitted) {
     // Ranks lead. The trade code still comes first because it is the row's subject -- pushing it
     // right would leave the leading columns with nothing to belong to -- but everything the reader
     // opened this view for now sits inside the first screen, with the terms trailing behind it.
     const ranks = Array.from({ length: rankLimit }, (_, index) => index + 1);
+    const columns = omitted ? TERM_COLUMNS.filter(column => !omitted.has(column.label)) : TERM_COLUMNS;
     const rankHeader = ranks.map(rank => `<th scope="col" class="rank-col">第 ${rank} 名</th>`).join("");
-    const termHeader = [
-      "Product", "Currency", "Trade Date", "Tenor (m)",
-      "BBG 1", "BBG 2", "BBG 3", "BBG 4", "BBG 5",
-      "Strike (%)", "KO Type", "KO Barrier (%)", "Coupon p.a. (%)", "Upfront / NotePrice (%)",
-      "Guaranteed Periods (m)", "Barrier Type", "KI Barrier (%)",
-      "Observation Frequency (m)", "OTC", "Effective Date Offset"
-    ].map(label => `<th scope="col"${label.startsWith("Upfront") ? " class=\"term-upfront\"" : ""}>${escapeHtml(label)}</th>`).join("");
+    const termHeader = columns
+      .map(column => `<th scope="col"${column.label.startsWith("Upfront") ? " class=\"term-upfront\"" : ""}>${escapeHtml(column.label)}</th>`)
+      .join("");
     const header = `<th scope="col">#</th>${rankHeader}${termHeader}`;
     const rows = payload.trades.map(trade => {
       const terms = trade.terms || {};
       const underlyings = Array.isArray(trade.underlyings) ? trade.underlyings : [];
-      const bbg = [0, 1, 2, 3, 4].map(index => `<td>${escapeHtml(underlyings[index] ?? "—")}</td>`).join("");
       return `<tr>
         <th scope="row">${escapeHtml(trade.tradeCode)}</th>
         ${ranks.map(rank => rankCellHtml(trade, rank)).join("")}
-        <td>${escapeHtml(trade.product ?? "—")}</td>
-        <td>${escapeHtml(trade.currency ?? "—")}</td>
-        <td>${escapeHtml(terms.tradeDate ?? "—")}</td>
-        <td>${escapeHtml(terms.tenorMonths == null ? "—" : String(terms.tenorMonths))}</td>
-        ${bbg}
-        ${termCellHtml(terms, "strikePct", trade.targetField, "%")}
-        <td>${escapeHtml(terms.koType ?? "—")}</td>
-        ${termCellHtml(terms, "koBarrierPct", trade.targetField, "%")}
-        ${termCellHtml(terms, "couponPaPct", trade.targetField, "%")}
-        ${termCellHtml(terms, "upfrontOrNotePricePct", trade.targetField, "%")}
-        <td>${escapeHtml(terms.guaranteedPeriodsMonths == null ? "—" : String(terms.guaranteedPeriodsMonths))}</td>
-        <td>${escapeHtml(terms.barrierType ?? "—")}</td>
-        ${termCellHtml(terms, "kiBarrierPct", trade.targetField, "%")}
-        <td>${escapeHtml(terms.observationFrequencyMonths == null ? "—" : String(terms.observationFrequencyMonths))}</td>
-        <td>${escapeHtml(terms.otc ?? "—")}</td>
-        <td>${escapeHtml(terms.effectiveDateOffsetCalendarDays == null ? "—" : String(terms.effectiveDateOffsetCalendarDays))}</td>
+        ${columns.map(column => column.cell(trade, terms, underlyings)).join("")}
       </tr>`;
     }).join("");
     return `<table class="ranking-table"><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table>`;
@@ -1217,7 +1234,7 @@
             .map(rank => `<option value="${rank}"${rank === rankLimit ? " selected" : ""}>前 ${rank} 名</option>`)
             .join("")}</select>
           <button type="button" class="secondary" data-table-image${state.hasRankings ? "" : " disabled"}>產出表格圖</button>
-          <span class="ranking-table-hint">名次同時套用到畫面表格與表格圖，表格圖含所有欄位。</span>
+          <span class="ranking-table-hint">名次同時套用到畫面表格與表格圖。表格圖不列示 Upfront 與 Observation Frequency、OTC、Effective Date Offset。</span>
         </div>`;
     return `<p class="ranking-table-note">${provisional
       ? "暫定排名，回覆期間內仍可能變動；正式排名後才能產出表格圖。"
@@ -1243,32 +1260,30 @@
     const reference = String(state.rfqId ?? "rfq");
     const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8"><style>
 *{box-sizing:border-box}
-body{margin:0;padding:34px;width:max-content;min-width:900px;background:#ffffff;color:#1c1c1e;font-family:Arial,"Microsoft JhengHei",sans-serif}
-.sheet-head{display:flex;align-items:flex-end;justify-content:space-between;gap:48px;padding-bottom:18px;border-bottom:4px solid #2a6f78}
-.sheet-head p{margin:0 0 6px;color:#06626e;font-size:15px;font-weight:bold;letter-spacing:.12em}
-.sheet-head h1{margin:0;color:#2a6f78;font-size:32px;letter-spacing:.02em}
-.sheet-meta{text-align:right;color:#6d6d72;font-size:15px;line-height:1.65}
-.sheet-meta strong{display:block;color:#1c1c1e;font-size:19px}
-.ranking-table{margin-top:22px;border-collapse:separate;border-spacing:0;font-size:15px;white-space:nowrap}
-.ranking-table th,.ranking-table td{padding:10px 14px;border-bottom:1px solid #dcdcdd;text-align:left}
+body{margin:0;padding:28px;width:max-content;min-width:820px;background:#ffffff;color:#1c1c1e;font-family:Arial,"Microsoft JhengHei",sans-serif}
+.sheet-head{display:flex;align-items:flex-end;justify-content:space-between;gap:48px;padding-bottom:16px;border-bottom:4px solid #2a6f78}
+.sheet-head p{margin:0 0 5px;color:#06626e;font-size:16px;font-weight:bold;letter-spacing:.12em}
+.sheet-head h1{margin:0;color:#2a6f78;font-size:34px;letter-spacing:.02em;line-height:1.1}
+.sheet-meta{text-align:right;color:#55555c;font-size:17px;line-height:1.5}
+.sheet-meta strong{display:block;color:#1c1c1e;font-size:21px}
+.ranking-table{margin-top:18px;border-collapse:separate;border-spacing:0;font-size:19px;line-height:1.25;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ranking-table th,.ranking-table td{padding:8px 13px;border-bottom:1px solid #dcdcdd;text-align:left}
 .ranking-table thead th{background:#2a6f78;color:#ffffff;font-weight:700}
 .ranking-table thead .rank-col{background:#0a7c8a}
-.ranking-table thead .term-upfront{background:#06626e;color:#ffffff}
 .ranking-table tbody th{background:#f2f7f8;font-weight:700}
 .ranking-table tbody tr:last-child th,.ranking-table tbody tr:last-child td{border-bottom:0}
-.ranking-table .term-upfront{background:#e4f2f4;font-weight:700}
 .ranking-table .term-target{color:#06626e;font-style:italic}
-.ranking-table .rank-cell{min-width:132px}
+.ranking-table .rank-cell{min-width:150px}
 .ranking-table .rank-cell.is-empty{color:#c4c4c6}
-.ranking-table .rank-issuer{display:block;font-weight:700;color:#1c1c1e}
-.ranking-table .rank-value{display:block;color:#6d6d72}
-.sheet-foot{margin-top:20px;color:#6d6d72;font-size:14px;line-height:1.6}
+.ranking-table .rank-issuer{display:block;font-weight:700;color:#1c1c1e;line-height:1.2}
+.ranking-table .rank-value{display:block;color:#55555c;line-height:1.2}
+.sheet-foot{margin-top:16px;color:#55555c;font-size:15px;line-height:1.5}
 </style></head><body>
 <header class="sheet-head">
 <div><p>FCN / DAC RANKING SUMMARY</p><h1>比價結果總表</h1></div>
 <div class="sheet-meta"><strong>${escapeHtml(reference)}</strong>${escapeHtml(generatedAt.toLocaleString("zh-TW", { hour12: false }))}<br>前 ${rankLimit} 名｜${trades.length} 筆交易</div>
 </header>
-${resultsTableMarkup({ trades }, rankLimit)}
+${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
 <p class="sheet-foot">正式排名。本表僅供參考，最終條件以發行機構正式報價及相關文件為準。</p>
 </body></html>`;
     return {
