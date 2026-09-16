@@ -1019,21 +1019,68 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
     return rows;
   }
 
+  // One mapping from the API's term names to this form's field names, shared by the field-error
+  // handler and the re-quote loader so the two can never disagree about where a term belongs.
+  const formFieldByTermName = {
+    product: "product", currency: "currency", tradeDate: "tradeDate", tenorMonths: "tenor",
+    guaranteedPeriodsMonths: "guaranteedPeriods", strikePct: "strike", koType: "koType",
+    koBarrierPct: "koBarrier", couponPaPct: "coupon", upfrontOrNotePricePct: "upfront",
+    barrierType: "barrierType", kiBarrierPct: "kiBarrier", observationFrequencyMonths: "observationFrequency",
+    effectiveDateOffsetCalendarDays: "effectiveDateOffset", otc: "otc",
+  };
+
   // Synchronous bridge: the static and authenticated send flows use the same field UI.
   // No backend module is loaded by the static website.
   document.addEventListener("fcn:validate-trades", event => {
     try { validatedMailRows(); }
     catch (error) { event.detail.error = error.message; setStatus(error.message); }
   });
+
+  // Re-quote: the authenticated flow hands over a finished RFQ's trades and this rebuilds the form
+  // from them. Trade Date is deliberately not carried over -- the new request is priced today, the
+  // same reason restoreDraft leaves it out. The term the issuers were asked to price arrives null
+  // and so lands as an empty field, which is exactly the blank the next request needs.
+  document.addEventListener("fcn:load-trades", event => {
+    const detail = event.detail || {};
+    const trades = Array.isArray(detail.trades) ? detail.trades.slice(0, MAX_ROWS) : [];
+    if (!trades.length) { detail.error = "這筆詢價沒有可重用的交易條件。"; return; }
+    const rows = trades.map(trade => {
+      const values = { product: trade.product ?? "", currency: trade.currency ?? "" };
+      const underlyings = Array.isArray(trade.underlyings) ? trade.underlyings : [];
+      [0, 1, 2, 3, 4].forEach(index => { values[`bbgCode${index + 1}`] = underlyings[index] ?? ""; });
+      Object.entries(trade.terms || {}).forEach(([term, value]) => {
+        const name = formFieldByTermName[term];
+        if (!name || name === "tradeDate") return;
+        values[name] = value === null || value === undefined ? "" : String(value);
+      });
+      return values;
+    });
+    const before = snapshotRows();
+    restoreRows(rows);
+    // A <select> silently keeps its current option when handed a value it does not offer, so a term
+    // that is no longer selectable would look accepted and be sent as something else. Report those
+    // rather than letting them reach an issuer.
+    const rejected = [];
+    [...tableBody.rows].forEach((row, index) => {
+      Object.entries(rows[index] || {}).forEach(([name, value]) => {
+        const field = rowField(row, name);
+        if (field && value !== "" && field.value !== value) rejected.push(`第 ${index + 1} 筆的 ${name}（${value}）`);
+      });
+    });
+    saveDraft();
+    detail.loaded = tableBody.rows.length;
+    detail.rejected = rejected;
+    detail.skipped = Array.isArray(detail.trades) ? detail.trades.length - trades.length : 0;
+    offerUndo(`已載入 ${tableBody.rows.length} 筆原詢價條件。`, () => {
+      restoreRows(before);
+      saveDraft();
+      setStatus("已復原載入前的輸入內容。", true);
+    });
+  });
+
   document.addEventListener("fcn:trade-field-errors", event => {
     clearFieldErrors();
-    const mapping = {
-      product: "product", currency: "currency", tradeDate: "tradeDate", tenorMonths: "tenor",
-      guaranteedPeriodsMonths: "guaranteedPeriods", strikePct: "strike", koType: "koType",
-      koBarrierPct: "koBarrier", couponPaPct: "coupon", upfrontOrNotePricePct: "upfront",
-      barrierType: "barrierType", kiBarrierPct: "kiBarrier", observationFrequencyMonths: "observationFrequency",
-      effectiveDateOffsetCalendarDays: "effectiveDateOffset", otc: "otc",
-    };
+    const mapping = formFieldByTermName;
     const messages = [];
     for (const [path, reason] of Object.entries(event.detail.fieldErrors || {})) {
       if (typeof reason !== "string") continue;

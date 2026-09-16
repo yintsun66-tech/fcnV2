@@ -721,9 +721,16 @@
       const percent = expected > 0 ? Math.min(100, Math.round(terminal / expected * 100)) : 0;
       const underlyings = Array.isArray(rfq.firstTrade?.underlyings) ? rfq.firstTrade.underlyings : [];
       const remainingTrades = Math.max(0, Number(rfq.tradeCount) - 1);
-      const action = activeWorkflowStatuses.has(rfq.workflowStatus)
+      const isActive = activeWorkflowStatuses.has(rfq.workflowStatus);
+      const action = isActive
         ? "查看進度"
         : rfq.hasUnrankedLateReplies ? "查看晚到報價" : "查看結果";
+      // A finished request is the most likely one to repeat, so it offers to refill the entry form
+      // from its own terms. It never sends anything: the requester reviews the form and uses the
+      // normal send button, which is also where the issuer picker and validation still apply.
+      const requeue = isActive
+        ? ""
+        : ` <button type="button" class="secondary" data-requeue-rfq="${escapeHtml(rfq.id)}">再詢一次</button>`;
       return `<article class="backend-rfq-card status-${escapeHtml(rfq.workflowStatus.toLowerCase())}">
         <header>
           <div><strong>${escapeHtml(rfq.id)}</strong><small>${escapeHtml(formatDateTime(rfq.createdAt))}</small></div>
@@ -738,7 +745,7 @@
         </div>
         ${rfq.hasUnrankedLateReplies ? '<p class="backend-rfq-late">有晚到報價，可開啟結果並執行版本化重新排名。</p>' : ""}
         ${expected ? `<div class="backend-rfq-progress"><span style="width:${percent}%"></span></div><small>已處理 ${terminal}/${expected} 家發行機構</small>` : ""}
-        <footer><span>${escapeHtml(rfqTimingText(rfq))}</span><button type="button" class="primary" data-open-rfq="${escapeHtml(rfq.id)}">${action}</button></footer>
+        <footer><span>${escapeHtml(rfqTimingText(rfq))}</span><span class="backend-rfq-actions">${requeue}<button type="button" class="primary" data-open-rfq="${escapeHtml(rfq.id)}">${action}</button></span></footer>
       </article>`;
     }).join("");
   }
@@ -792,6 +799,44 @@
     });
     if (!rfqHistoryDialog.open) rfqHistoryDialog.showModal();
     await loadRfqHistory();
+  }
+
+  // Refills the trade form from a finished request, and deliberately stops there. It never creates
+  // or sends anything: a send puts real mail in front of issuer desks, so the requester reviews the
+  // form and uses the normal send button, where validation and the issuer boundary still apply.
+  // The term that was being priced comes back null and lands as an empty field, which is the blank
+  // the next request needs, so a re-quote asks the same question rather than restating the answer.
+  async function requeueRfq(target) {
+    const rfqId = target.dataset.requeueRfq;
+    if (!/^rfq_[A-Za-z0-9-]+$/u.test(rfqId)) return;
+    const originalLabel = target.textContent;
+    target.disabled = true;
+    target.textContent = "載入中…";
+    try {
+      const payload = await request(`/rfqs/${encodeURIComponent(rfqId)}/results`);
+      const detail = { trades: Array.isArray(payload?.trades) ? payload.trades : [] };
+      document.dispatchEvent(new CustomEvent("fcn:load-trades", { detail }));
+      if (detail.error) throw new Error(detail.error);
+      const issuers = Array.isArray(payload?.issuers)
+        ? [...new Set(payload.issuers.map(entry => entry?.issuer).filter(Boolean))]
+        : [];
+      if (issuers.length) setIssuerSelection(issuers);
+      if (rfqHistoryDialog.open) rfqHistoryDialog.close();
+      const notes = [`已載入 ${detail.loaded} 筆原條件，Trade Date 已改為今天。`];
+      if (issuers.length) notes.push(`已勾選原本的 ${issuers.length} 家發行機構。`);
+      if (detail.skipped > 0) notes.push(`原詢價另有 ${detail.skipped} 筆超過 ${20} 筆上限，未載入。`);
+      if (detail.rejected?.length) notes.push(`下列欄位的原值已不在可選清單，請重新確認：${detail.rejected.join("、")}。`);
+      notes.push("確認條件後請自行按「發送詢價條件」，系統不會自動送出。");
+      statusElement.textContent = notes.join("");
+      statusElement.classList.remove("success");
+      document.querySelector("#quoteTable")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) {
+      statusElement.textContent = error instanceof Error ? error.message : "無法載入原詢價條件。";
+      statusElement.classList.remove("success");
+    } finally {
+      target.disabled = false;
+      target.textContent = originalLabel;
+    }
   }
 
   async function openRfq(rfqId, { updateUrl = true, replace = false } = {}) {
@@ -1693,6 +1738,8 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
     void loadRfqHistory();
   });
   rfqHistoryList.addEventListener("click", event => {
+    const requeueTarget = event.target.closest("[data-requeue-rfq]");
+    if (requeueTarget) { void requeueRfq(requeueTarget); return; }
     const target = event.target.closest("[data-open-rfq]");
     if (target) void openRfq(target.dataset.openRfq);
   });
