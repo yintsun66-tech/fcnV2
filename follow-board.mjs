@@ -1,4 +1,4 @@
-import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
+import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
 
 const OFFICIAL_FOLLOW_BOARD_URL = "https://app.yintsun66.com/follow-board.html";
 const API_ORIGINS = location.hostname === "app.yintsun66.com"

@@ -1,4 +1,4 @@
-import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
+import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
 
 const CARD_RENDER_STEP_TIMEOUT_MS = 12_000;
 const CARD_RENDER_TOTAL_TIMEOUT_MS = 24_000;
@@ -12,19 +12,36 @@ function escapeHtml(value) {
   })[character]);
 }
 
+// Each step carries an ASCII code beside its message. Recording only that a render failed made the
+// 12-second hang in the loader take a browser reproduction to find; the code says which step ran
+// out of time, and the backend only stores it after checking it against this same set.
+const RENDER_STEPS = {
+  CARD_FETCH: { code: "CARD_FETCH", label: "取得報價資料" },
+  LOADER: { code: "LOADER", label: "載入圖片元件" },
+  FRAME: { code: "FRAME", label: "載入" },
+  FONTS: { code: "FONTS", label: "字型" },
+  DRAW: { code: "DRAW", label: "繪製" },
+  ENCODE: { code: "ENCODE", label: "轉檔" },
+  SERVER_FALLBACK: { code: "SERVER_FALLBACK", label: "啟動伺服器備援" }
+};
+
+function renderError(message, step) {
+  return Object.assign(new Error(message), { renderStep: step?.code ?? "UNKNOWN" });
+}
+
 function withRenderTimeout(value, step, timeoutMs = CARD_RENDER_STEP_TIMEOUT_MS) {
   let timer;
   return Promise.race([
     Promise.resolve(value).finally(() => clearTimeout(timer)),
     new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`產圖逾時（${step}）`)), timeoutMs);
+      timer = setTimeout(() => reject(renderError(`產圖逾時（${step.label}）`, step)), timeoutMs);
     })
   ]);
 }
 
 function withRenderDeadline(start, step, deadlineAt, maximumMs = CARD_RENDER_STEP_TIMEOUT_MS) {
   const remainingMs = deadlineAt - Date.now();
-  if (remainingMs <= 0) return Promise.reject(new Error(`產圖逾時（${step}）`));
+  if (remainingMs <= 0) return Promise.reject(renderError(`產圖逾時（${step.label}）`, step));
   return withRenderTimeout(Promise.resolve().then(start), step, Math.min(maximumMs, remainingMs));
 }
 
@@ -46,7 +63,7 @@ export function createImageController({
         deadlineAt
       );
     } catch (error) {
-      if (error?.name === "AbortError") throw new Error(`產圖逾時（${step}）`);
+      if (error?.name === "AbortError") throw renderError(`產圖逾時（${step.label}）`, step);
       throw error;
     } finally {
       controller.abort();
@@ -103,12 +120,12 @@ export function createImageController({
         frame.addEventListener("load", resolve, { once: true });
         frame.addEventListener("error", () => reject(new Error("報價圖載入失敗。")), { once: true });
         frame.srcdoc = html;
-      }), "載入", deadlineAt);
+      }), RENDER_STEPS.FRAME, deadlineAt);
       const frameDocument = frame.contentDocument;
-      if (!frameDocument?.body) throw new Error("無法讀取報價圖內容。");
+      if (!frameDocument?.body) throw renderError("無法讀取報價圖內容。", RENDER_STEPS.FRAME);
       if (frameDocument.fonts?.ready) {
         try {
-          await withRenderDeadline(() => frameDocument.fonts.ready, "字型", deadlineAt, CARD_FONT_TIMEOUT_MS);
+          await withRenderDeadline(() => frameDocument.fonts.ready, RENDER_STEPS.FONTS, deadlineAt, CARD_FONT_TIMEOUT_MS);
         } catch {
           // Rendering with the resolved fallback font is preferable to failing the export.
         }
@@ -120,7 +137,7 @@ export function createImageController({
         : width;
       if (renderWidth !== width) frame.style.width = `${renderWidth}px`;
       const height = Math.max(frameDocument.body.scrollHeight, frameDocument.documentElement.scrollHeight);
-      if (!height) throw new Error("報價圖版面尚未完成，請再試一次。");
+      if (!height) throw renderError("報價圖版面尚未完成，請再試一次。", RENDER_STEPS.DRAW);
       frame.style.height = `${height}px`;
       const scale = Math.max(
         0.5,
@@ -135,13 +152,13 @@ export function createImageController({
         height,
         windowWidth: renderWidth,
         windowHeight: height
-      }), "繪製", deadlineAt);
+      }), RENDER_STEPS.DRAW, deadlineAt);
       const blob = await withRenderDeadline(
         () => new Promise(resolve => canvas.toBlob(resolve, "image/png")),
-        "轉檔",
+        RENDER_STEPS.ENCODE,
         deadlineAt
       );
-      if (!blob) throw new Error("報價圖轉檔失敗。");
+      if (!blob) throw renderError("報價圖轉檔失敗。", RENDER_STEPS.ENCODE);
       return blob;
     } finally {
       frame.remove();
@@ -154,10 +171,10 @@ export function createImageController({
       requestForRender(
         `/rfqs/${rfqId}/trades/${encodeURIComponent(tradeCode)}/quotes/${encodeURIComponent(quoteId)}/card`,
         {},
-        "取得報價資料",
+        RENDER_STEPS.CARD_FETCH,
         deadlineAt
       ),
-      withRenderDeadline(() => loadHtml2Canvas(), "載入圖片元件", deadlineAt)
+      withRenderDeadline(() => loadHtml2Canvas(), RENDER_STEPS.LOADER, deadlineAt)
     ]);
     const blob = await rasterizeDocument(card.html, card.width, deadlineAt, html2canvas);
     showCardImage(blob, `${rfqId}-${card.tradeCode}-${card.issuer}.png`);
@@ -169,11 +186,21 @@ export function createImageController({
     return "DESKTOP";
   }
 
-  function reportClientImageEvent(rfqId, outcome, startedAt) {
+  function reportClientImageEvent(rfqId, outcome, startedAt, failureStep) {
     const elapsedMs = Math.max(0, Math.min(120_000, Math.round(performance.now() - startedAt)));
+    const body = { outcome, elapsedMs, deviceClass: clientDeviceClass() };
+    // Only sent on failure, and only ever one of the known codes -- the backend rejects anything
+    // else rather than storing a string this browser chose.
+    if (outcome === "LOCAL_FAILED") {
+      // hasOwnProperty.call rather than Object.hasOwn: this runs inside the fallback path, and a
+      // TypeError from a newer built-in on older mobile WebKit would break the fallback as well.
+      body.failureStep = Object.prototype.hasOwnProperty.call(RENDER_STEPS, failureStep)
+        ? failureStep
+        : "UNKNOWN";
+    }
     void request(`/rfqs/${rfqId}/image-events`, {
       method: "POST",
-      body: JSON.stringify({ outcome, elapsedMs, deviceClass: clientDeviceClass() }),
+      body: JSON.stringify(body),
       timeoutMs: 4_000
     }).catch(() => {});
   }
@@ -193,14 +220,14 @@ export function createImageController({
         reportClientImageEvent(rfqId, "LOCAL_READY", localRenderStartedAt);
         return;
       } catch (localError) {
-        reportClientImageEvent(rfqId, "LOCAL_FAILED", localRenderStartedAt);
+        reportClientImageEvent(rfqId, "LOCAL_FAILED", localRenderStartedAt, localError?.renderStep);
         const message = localError instanceof Error ? localError.message : "本機產圖失敗。";
         status.textContent = `${message} 改用伺服器產圖…`;
       }
       await requestForRender(
         `/rfqs/${rfqId}/trades/${encodeURIComponent(artifactTrade)}/quotes/${encodeURIComponent(artifactQuote)}/artifact`,
         { method: "POST", body: "{}" },
-        "啟動伺服器備援",
+        RENDER_STEPS.SERVER_FALLBACK,
         Date.now() + CARD_RENDER_STEP_TIMEOUT_MS
       );
       resetSnapshot();
@@ -229,7 +256,7 @@ export function createImageController({
       const sheet = buildTableSheet();
       if (!sheet) throw new Error("目前沒有可產圖的正式排名結果。");
       const deadlineAt = Date.now() + CARD_RENDER_TOTAL_TIMEOUT_MS;
-      const html2canvas = await withRenderDeadline(() => loadHtml2Canvas(), "載入圖片元件", deadlineAt);
+      const html2canvas = await withRenderDeadline(() => loadHtml2Canvas(), RENDER_STEPS.LOADER, deadlineAt);
       const blob = await rasterizeDocument(sheet.html, sheet.width, deadlineAt, html2canvas, { autoWidth: true });
       showCardImage(blob, sheet.filename);
     } catch (error) {

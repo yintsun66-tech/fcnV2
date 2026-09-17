@@ -363,7 +363,7 @@
 
   function loadImageController() {
     if (!imageControllerPromise) {
-      imageControllerPromise = import("./backend-image.mjs?v=table-image-v1")
+      imageControllerPromise = import("./backend-image.mjs?v=render-fix-v1")
         .then(({ createImageController }) => createImageController({
           getRfqId: () => state.rfqId,
           request,

@@ -14,7 +14,7 @@ import {
   buildMailtoUrl,
   buildZimbraComposeUrl,
 } from "./mail-compose.mjs?v=zimbra-compose-v1";
-import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=lazy-render-v1";
+import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
 
 (() => {
   "use strict";
