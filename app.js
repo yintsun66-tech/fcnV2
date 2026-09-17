@@ -23,7 +23,12 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
   const DRAFT_STORAGE_KEY = "fcn-quote-app.trade-draft.v1";
   const STATIC_IDENTITY_STORAGE_KEY = "fcn-quote-app.static-requester.v1";
   const ROW_CHANGE_DEBOUNCE_MS = 250;
-  const MAIL_TO = "i14053@firstbank.com.tw";
+  // Assembled at runtime so the published file holds no literal address for a crawler grepping
+  // public JavaScript for an email pattern. This is obfuscation and not protection: the value is
+  // plainly visible to anyone who opens developer tools, it is shown in the send dialog by design,
+  // and it has been public in the fcnV2 snapshot since 2026-07-27, so this narrows future automated
+  // collection and retracts nothing. Keep the two halves separate if this line is ever edited.
+  const MAIL_TO = ["i14053", "firstbank.com.tw"].join("@");
   const DEFAULT_MAIL_SUBJECT = "BMJB[詢價]FCBKTPE: FCN(T+7)";
   const tableBody = document.querySelector("#quoteTable tbody");
   const status = document.querySelector("#status");
