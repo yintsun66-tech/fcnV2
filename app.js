@@ -168,6 +168,7 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     CITI: { name: "CITIGROUP", shortName: "CITI", theme: "citi" },
     GS: { name: "GOLDMAN SACHS", shortName: "GS", theme: "gs" },
     CA: { name: "CREDIT AGRICOLE CIB", shortName: "CA", theme: "ca" },
+    HSBC: { name: "HSBC", shortName: "HSBC", theme: "hsbc" },
   };
 
   const fields = [
@@ -991,6 +992,9 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     const records = rows.map(row => Object.fromEntries(
       fields.map(([name]) => [name, rowValue(row, name)])
     ));
+    if (key === "HSBC" && records.some(record => record.product === "DAC")) {
+      throw new Error("匯豐 DRA 尚待正式樣本驗證，目前只開放 FCN 詢價。");
+    }
     const email = buildSharedInstitutionEmail(key, records);
     if (!isStaticSite) return email;
     if (!staticIdentity) throw new Error("請先輸入分行名稱與五碼行編。");
@@ -1225,8 +1229,11 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
       const rows = validatedMailRows();
       const selection = emailIssuerSelect.value;
       emailIssuerDialog.close();
+      const availableBatches = rows.some(row => rowValue(row, "product") === "DAC")
+        ? SHARED_MAIL_INSTITUTION_ORDER.filter(key => key !== "HSBC")
+        : SHARED_MAIL_INSTITUTION_ORDER;
       emailQueue = selection === "ALL"
-        ? SHARED_MAIL_INSTITUTION_ORDER.map(key => buildInstitutionEmail(key, rows))
+        ? availableBatches.map(key => buildInstitutionEmail(key, rows))
         : [buildInstitutionEmail(selection, rows)];
       emailQueueIndex = 0;
       saveMailQueue();

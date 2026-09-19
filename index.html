@@ -8,7 +8,7 @@
     <link rel="icon" href="./icon.svg?v=icon-v1" type="image/svg+xml" />
     <link rel="icon" href="./icon-32.png?v=icon-v1" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=icon-v1" />
-    <link rel="stylesheet" href="./styles.css?v=requote-v1" />
+    <link rel="stylesheet" href="./styles.css?v=issuer-palette-v1" />
     <link
       id="darkSheet"
       rel="stylesheet"
@@ -235,6 +235,7 @@
           <option value="CITI">CITI</option>
           <option value="GS">GS</option>
           <option value="CA">CA</option>
+          <option value="HSBC">HSBC（匯豐）</option>
         </select>
         <p id="issuerWarning" class="issuer-warning" hidden>提醒：MS 產品 OBU 不得承做。</p>
         <div class="dialog-actions">
@@ -258,7 +259,8 @@
           <option value="CITI">CITI</option>
           <option value="GS">GS</option>
           <option value="CA">CA</option>
-          <option value="ALL">全部（依序建立 8 封郵件）</option>
+          <option value="HSBC">HSBC（匯豐，僅 FCN）</option>
+          <option value="ALL">全部（FCN 9 封／DRA 8 封）</option>
         </select>
         <p id="emailIssuerHint" class="dialog-hint">系統會先複製 HTML 表格，再讓您選擇裝置預設郵件程式或已在 Edge 登入的 Zimbra 網頁版。「全部」會逐封準備，避免裝置只保留最後一封草稿。</p>
         <div class="dialog-actions">

@@ -48,7 +48,7 @@ function citiDailyKo(value) {
   return /^Daily/i.test(value) ? "TRUE" : "FALSE";
 }
 
-export const MAIL_INSTITUTION_ORDER = Object.freeze(["BMJB", "NOMURA", "UBS", "DBS", "SG", "CITI", "GS", "CA"]);
+export const MAIL_INSTITUTION_ORDER = Object.freeze(["BMJB", "NOMURA", "UBS", "DBS", "SG", "CITI", "GS", "CA", "HSBC"]);
 
 export const EMAIL_INSTITUTIONS = Object.freeze({
   BMJB: {
@@ -113,6 +113,17 @@ export const EMAIL_INSTITUTIONS = Object.freeze({
     dacSubjectProduct: "DRA",
     columns: [
       productColumn("Product", "FCN", "DRA"), sourceColumn("Currency", "currency"), sourceColumn("BBG Code 1", "bbgCode1"), sourceColumn("BBG Code 2", "bbgCode2"), sourceColumn("BBG Code 3", "bbgCode3"), sourceColumn("BBG Code 4", "bbgCode4"), sourceColumn("Strike (%)", "strike"), sourceColumn("KO Type", "koType"), sourceColumn("Guaranteed Periods (m)", "guaranteedPeriods"), sourceColumn("KO Barrier (%)", "koBarrier"), sourceColumn("Coupon p.a. (%)", "coupon"), sourceColumn("Upfront / NotePrice (%)", "upfront"), sourceColumn("Tenor (m)", "tenor"), sourceColumn("Barrier Type", "barrierType"), sourceColumn("KI Barrier (%)", "kiBarrier"), sourceColumn("Observation Frequency (m)", "observationFrequency"), sourceColumn("OTC", "otc"), blankColumn("Funding Spread (bps)"), blankColumn("Remarks"),
+    ],
+  },
+  HSBC: {
+    label: "HSBC 匯豐",
+    subject: "HSBC[詢價]FCBKTPE: FCN(T+7)",
+    dacSubjectProduct: "DRA",
+    columns: [
+      productColumn("Product", "FCN", "DRA"), sourceColumn("Currency", "currency"), sourceColumn("Guaranteed Periods (m)", "guaranteedPeriods"),
+      sourceColumn("BBG Code 1", "bbgCode1"), sourceColumn("BBG Code 2", "bbgCode2"), sourceColumn("BBG Code 3", "bbgCode3"), sourceColumn("BBG Code 4", "bbgCode4"), sourceColumn("BBG Code 5", "bbgCode5"),
+      sourceColumn("Strike (%)", "strike"), sourceColumn("KO Type", "koType"), sourceColumn("KO Barrier (%)", "koBarrier"), sourceColumn("Coupon p.a. (%)", "coupon"), sourceColumn("Upfront / NotePrice (%)", "upfront"), sourceColumn("Tenor (m)", "tenor"), sourceColumn("Barrier Type", "barrierType"), sourceColumn("KI Barrier (%)", "kiBarrier"), sourceColumn("Observation Frequency (m)", "observationFrequency"),
+      { label: "OTC", value: record => recordValue(record, "product") ? "Note" : "" }, blankColumn("Funding Spread (bps)"), { label: "Effective Date Offset(Calendar Days)", value: () => "7" }, sourceColumn("Strike Date", "tradeDate"),
     ],
   },
 });

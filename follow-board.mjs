@@ -11,17 +11,18 @@ const PIN_STORAGE_KEY = "fcn-follow-board-pin";
 const API_TIMEOUT_MS = 15_000;
 const previewProductCode = new URLSearchParams(location.search).get("product")?.normalize("NFKC").trim().toUpperCase() || "";
 const THEMES = {
-  BNP: ["#008a4b", "#0875a8", "#e7f8ef"],
-  BARCLAYS: ["#0077a8", "#008b73", "#e7f6fb"],
-  MS: ["#006f80", "#00855d", "#e5f7f6"],
-  JPM: ["#174d85", "#00806c", "#e8f3fb"],
-  NOMURA: ["#b51f36", "#7d1730", "#fbecee"],
-  UBS: ["#d71920", "#8b1d33", "#fcebed"],
-  DBS: ["#d31245", "#9e1638", "#fbe9ef"],
-  SG: ["#0875b9", "#008a73", "#e8f5fb"],
-  CITI: ["#056dae", "#d23449", "#e9f4fb"],
-  GS: ["#1f6fb2", "#16866c", "#e9f4fb"],
-  CA: ["#1b5aa6", "#168064", "#e9f1fb"]
+  BNP: ["#00965E", "#046A43", "#e7f8ef"],
+  BARCLAYS: ["#00AEEF", "#00395D", "#e6f7fc"],
+  MS: ["#002F6C", "#003DA5", "#e6ecf5"],
+  JPM: ["#0b2545", "#123a6b", "#e7edf5"],
+  NOMURA: ["#CA142A", "#8a0f1e", "#fbe7ea"],
+  UBS: ["#E60000", "#1a1a1a", "#fbe8ea"],
+  DBS: ["#FF3333", "#9e1638", "#fbe9ef"],
+  SG: ["#E30613", "#231F20", "#fbe8ea"],
+  CITI: ["#003A72", "#DB230B", "#e8f0f7"],
+  GS: ["#1a1a1a", "#4d4d4d", "#f0f0f0"],
+  CA: ["#006F4E", "#009B9D", "#e6f5f1"],
+  HSBC: ["#DB0011", "#2b2b2b", "#f9ecee"]
 };
 
 const elements = Object.fromEntries([

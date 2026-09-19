@@ -208,7 +208,7 @@
           <label>發行機構<select id="backendLifecycleIssuer" name="issuer">
             <option value="">全部</option><option>BNP</option><option>MS</option><option>JPM</option>
             <option>BARCLAYS</option><option value="NOMURA">NOMURA</option><option>UBS</option>
-            <option>DBS</option><option>SG</option><option>CITI</option><option>GS</option><option>CA</option>
+            <option>DBS</option><option>SG</option><option>CITI</option><option>GS</option><option>CA</option><option>HSBC</option>
           </select></label>
           <label>商品類型<select id="backendLifecycleProductType" name="productType"><option value="">全部</option><option>FCN</option><option>DAC</option></select></label>
           <label>幣別<select id="backendLifecycleCurrency" name="currency"><option value="">全部</option><option>USD</option><option>JPY</option><option>EUR</option><option>HKD</option><option>CNH</option><option>CAD</option><option>GBP</option><option>AUD</option><option>ZAR</option></select></label>
@@ -232,7 +232,7 @@
           <button type="button" id="issuerFastSave" class="secondary">儲存目前組合</button>
         </div>
         <div class="issuer-pick-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 16px;margin:10px 0">
-          ${[["BNP", "BNP"], ["MS", "MS（OBU不得承做）"], ["JPM", "JPM"], ["BARCLAYS", "BARCLAYS"], ["NOMURA", "Nomura"], ["UBS", "UBS"], ["DBS", "DBS"], ["SG", "SG"], ["CITI", "CITI"], ["GS", "GS"], ["CA", "CA"]].map(([value, label]) => `<label class="issuer-pick"><input type="checkbox" class="issuer-pick-item" value="${value}" checked> ${label}</label>`).join("")}
+          ${[["BNP", "BNP"], ["MS", "MS（OBU不得承做）"], ["JPM", "JPM"], ["BARCLAYS", "BARCLAYS"], ["NOMURA", "Nomura"], ["UBS", "UBS"], ["DBS", "DBS"], ["SG", "SG"], ["CITI", "CITI"], ["GS", "GS"], ["CA", "CA"], ["HSBC", "HSBC（匯豐，僅 FCN）"]].map(([value, label]) => `<label class="issuer-pick"><input type="checkbox" class="issuer-pick-item" value="${value}" checked> ${label}</label>`).join("")}
         </div>
         <p id="backendIssuerPickerSummary" class="issuer-picker-summary" role="status"></p>
         <p id="backendIssuerPickerHint" class="backend-archive-note"></p>
@@ -1506,6 +1506,14 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
     const kiIssue = kiBarrierIssue();
     if (kiIssue) { statusElement.textContent = kiIssue; statusElement.classList.remove("success"); return; }
     issuerPickerError.textContent = "";
+    const hasDac = collectTrades().some(trade => trade.product === "DAC");
+    const hsbc = issuerPickItems.find(item => item.value === "HSBC");
+    if (hsbc) {
+      hsbc.disabled = hasDac;
+      if (hasDac) hsbc.checked = false;
+      hsbc.closest("label")?.classList.toggle("is-disabled", hasDac);
+      hsbc.closest("label")?.setAttribute("title", hasDac ? "匯豐 DRA 尚待正式樣本驗證，目前只開放 FCN。" : "");
+    }
     refreshFastIssuerPresetButton();
     updateIssuerPickerSummary();
     if (!issuerPickerDialog.open) issuerPickerDialog.showModal();
@@ -1513,7 +1521,7 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
 
   const issuerBatchByName = {
     BNP: "BMJB", MS: "BMJB", JPM: "BMJB", BARCLAYS: "BMJB",
-    NOMURA: "NOMURA", UBS: "UBS", DBS: "DBS", SG: "SG", CITI: "CITI", GS: "GS", CA: "CA"
+    NOMURA: "NOMURA", UBS: "UBS", DBS: "DBS", SG: "SG", CITI: "CITI", GS: "GS", CA: "CA", HSBC: "HSBC"
   };
   const fastIssuerPresetKey = "fcn-rfq-fast-issuers-v1";
 
@@ -1530,8 +1538,9 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
 
   function setIssuerSelection(selected) {
     const selectedSet = new Set(selected);
-    issuerPickItems.forEach(item => { item.checked = selectedSet.has(item.value); });
-    issuerPickAll.checked = issuerPickItems.every(item => item.checked);
+    issuerPickItems.forEach(item => { item.checked = !item.disabled && selectedSet.has(item.value); });
+    const enabledItems = issuerPickItems.filter(item => !item.disabled);
+    issuerPickAll.checked = enabledItems.length > 0 && enabledItems.every(item => item.checked);
     updateIssuerPickerSummary();
   }
 
@@ -1566,11 +1575,12 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
     }
   }, true);
   issuerPickAll.addEventListener("change", () => {
-    issuerPickItems.forEach(item => { item.checked = issuerPickAll.checked; });
+    issuerPickItems.forEach(item => { item.checked = !item.disabled && issuerPickAll.checked; });
     updateIssuerPickerSummary();
   });
   issuerPickItems.forEach(item => item.addEventListener("change", () => {
-    issuerPickAll.checked = issuerPickItems.every(entry => entry.checked);
+    const enabledItems = issuerPickItems.filter(entry => !entry.disabled);
+    issuerPickAll.checked = enabledItems.length > 0 && enabledItems.every(entry => entry.checked);
     updateIssuerPickerSummary();
   }));
   issuerFastStart.addEventListener("click", () => {
