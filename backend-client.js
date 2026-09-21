@@ -232,7 +232,7 @@
           <button type="button" id="issuerFastSave" class="secondary">儲存目前組合</button>
         </div>
         <div class="issuer-pick-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 16px;margin:10px 0">
-          ${[["BNP", "BNP"], ["MS", "MS（OBU不得承做）"], ["JPM", "JPM"], ["BARCLAYS", "BARCLAYS"], ["NOMURA", "Nomura"], ["UBS", "UBS"], ["DBS", "DBS"], ["SG", "SG"], ["CITI", "CITI"], ["GS", "GS"], ["CA", "CA"], ["HSBC", "HSBC（匯豐，僅 FCN）"]].map(([value, label]) => `<label class="issuer-pick"><input type="checkbox" class="issuer-pick-item" value="${value}" checked> ${label}</label>`).join("")}
+          ${[["BNP", "BNP"], ["MS", "MS（OBU不得承做）"], ["JPM", "JPM"], ["BARCLAYS", "BARCLAYS"], ["NOMURA", "Nomura"], ["UBS", "UBS"], ["DBS", "DBS"], ["SG", "SG"], ["CITI", "CITI"], ["GS", "GS"], ["CA", "CA"], ["HSBC", "HSBC（匯豐）"]].map(([value, label]) => `<label class="issuer-pick"><input type="checkbox" class="issuer-pick-item" value="${value}" checked> ${label}</label>`).join("")}
         </div>
         <p id="backendIssuerPickerSummary" class="issuer-picker-summary" role="status"></p>
         <p id="backendIssuerPickerHint" class="backend-archive-note"></p>
@@ -1506,14 +1506,6 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
     const kiIssue = kiBarrierIssue();
     if (kiIssue) { statusElement.textContent = kiIssue; statusElement.classList.remove("success"); return; }
     issuerPickerError.textContent = "";
-    const hasDac = collectTrades().some(trade => trade.product === "DAC");
-    const hsbc = issuerPickItems.find(item => item.value === "HSBC");
-    if (hsbc) {
-      hsbc.disabled = hasDac;
-      if (hasDac) hsbc.checked = false;
-      hsbc.closest("label")?.classList.toggle("is-disabled", hasDac);
-      hsbc.closest("label")?.setAttribute("title", hasDac ? "匯豐 DRA 尚待正式樣本驗證，目前只開放 FCN。" : "");
-    }
     refreshFastIssuerPresetButton();
     updateIssuerPickerSummary();
     if (!issuerPickerDialog.open) issuerPickerDialog.showModal();

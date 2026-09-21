@@ -941,7 +941,7 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
 
   async function loadBbgLookup() {
     try {
-      const response = await fetch("./交易所查詢0715.csv");
+      const response = await fetch("./交易所查詢0715.csv?v=20260921");
       if (!response.ok) throw new Error("CSV 載入失敗");
       const lines = (await response.text()).replace(/^\uFEFF/, "").trim().split(/\r?\n/);
       lines.slice(1).forEach(line => {
@@ -992,9 +992,6 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     const records = rows.map(row => Object.fromEntries(
       fields.map(([name]) => [name, rowValue(row, name)])
     ));
-    if (key === "HSBC" && records.some(record => record.product === "DAC")) {
-      throw new Error("匯豐 DRA 尚待正式樣本驗證，目前只開放 FCN 詢價。");
-    }
     const email = buildSharedInstitutionEmail(key, records);
     if (!isStaticSite) return email;
     if (!staticIdentity) throw new Error("請先輸入分行名稱與五碼行編。");
@@ -1229,9 +1226,7 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
       const rows = validatedMailRows();
       const selection = emailIssuerSelect.value;
       emailIssuerDialog.close();
-      const availableBatches = rows.some(row => rowValue(row, "product") === "DAC")
-        ? SHARED_MAIL_INSTITUTION_ORDER.filter(key => key !== "HSBC")
-        : SHARED_MAIL_INSTITUTION_ORDER;
+      const availableBatches = SHARED_MAIL_INSTITUTION_ORDER;
       emailQueue = selection === "ALL"
         ? availableBatches.map(key => buildInstitutionEmail(key, rows))
         : [buildInstitutionEmail(selection, rows)];

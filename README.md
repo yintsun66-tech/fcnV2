@@ -17,10 +17,11 @@
 ## 版本基準
 
 - 靜態同步來源：`yintsun66-tech/fcn-quote-app`
-- 來源分支：`codex/market-analysis-phase2-4`
-- 來源功能 HEAD：`e90ce53`
-- 正式靜態程式基線：Cloudflare 功能 commit `e90ce53`
-- 同步日期：2026-07-31（Asia/Taipei）
+- 來源分支：`codex/hsbc-issuer-onboarding`（主專案 `main` 尚未合併此分支）
+- 來源功能 commit：`63f1c89`
+- 正式 Cloudflare Worker 版本：`ec0886b7-9da3-47cb-a17f-85641af23b69`
+- 本次同步：HSBC DRA 靜態詢價、`Strike Date` 郵件格式與 2026-09-21 UD 代號對照
+- 同步日期：2026-09-21（Asia/Taipei）
 
 ## 重要邊界
 

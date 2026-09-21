@@ -259,8 +259,8 @@
           <option value="CITI">CITI</option>
           <option value="GS">GS</option>
           <option value="CA">CA</option>
-          <option value="HSBC">HSBC（匯豐，僅 FCN）</option>
-          <option value="ALL">全部（FCN 9 封／DRA 8 封）</option>
+          <option value="HSBC">HSBC（匯豐）</option>
+          <option value="ALL">全部（FCN／DRA 各 9 封）</option>
         </select>
         <p id="emailIssuerHint" class="dialog-hint">系統會先複製 HTML 表格，再讓您選擇裝置預設郵件程式或已在 Edge 登入的 Zimbra 網頁版。「全部」會逐封準備，避免裝置只保留最後一封草稿。</p>
         <div class="dialog-actions">
@@ -292,11 +292,11 @@
     </dialog>
 
     <script type="module" src="./market-holidays.mjs?v=market-holidays-v1"></script>
-    <script type="module" src="./app.js?v=mailto-hide-v1"></script>
+    <script type="module" src="./app.js?v=hsbc-dra-v1"></script>
     <script type="module" src="./earnings-advisory.mjs?v=undo-resume-v1"></script>
     <script type="module">
       if (location.hostname === "app.yintsun66.com" || new URLSearchParams(location.search).get("backend") === "1") {
-        import("./backend-client.js?v=render-fix-v1");
+        import("./backend-client.js?v=hsbc-dra-v1");
       }
     </script>
     <script>
