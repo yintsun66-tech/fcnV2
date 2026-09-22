@@ -14,7 +14,7 @@ function recordValue(record, name) {
 
 const sourceColumn = (label, name) => ({ label, value: record => recordValue(record, name) });
 const blankColumn = label => ({ label, value: () => "" });
-const strikeDateColumn = () => ({ label: "Strike Date", value: record => {
+const strikeDateColumn = (format = "iso") => ({ label: "Strike Date", value: record => {
   const input = recordValue(record, "tradeDate");
   if (!input) return "";
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -27,6 +27,9 @@ const strikeDateColumn = () => ({ label: "Strike Date", value: record => {
   if (!Number.isInteger(year) || year < 2000 || year > 2099 || month < 1 || month > 12
     || parsed.getUTCFullYear() !== year || parsed.getUTCMonth() + 1 !== month || parsed.getUTCDate() !== day) {
     throw new Error("Strike Date 必須是有效的 DD-MMM-YY 或 YYYY-MM-DD 日期。");
+  }
+  if (format === "dd-MMM-yy") {
+    return `${String(day).padStart(2, "0")}-${monthNames[month - 1]}-${String(year).slice(-2)}`;
   }
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 } });
@@ -110,7 +113,7 @@ export const EMAIL_INSTITUTIONS = Object.freeze({
     label: "CITI",
     subject: "CITI[詢價]FCBKTPE: FCN(T+7)",
     columns: [
-      productColumn("Product", "FCA", "DRA"), strikeDateColumn(), sourceColumn("Currency", "currency"), sourceColumn("Tenor (m)", "tenor"), { label: "Issue T+", value: record => numberOffset(recordValue(record, "effectiveDateOffset"), -2) },
+      productColumn("Product", "FCA", "DRA"), strikeDateColumn("dd-MMM-yy"), sourceColumn("Currency", "currency"), sourceColumn("Tenor (m)", "tenor"), { label: "Issue T+", value: record => numberOffset(recordValue(record, "effectiveDateOffset"), -2) },
       sourceColumn("BBG Code 1", "bbgCode1"), sourceColumn("BBG Code 2", "bbgCode2"), sourceColumn("BBG Code 3", "bbgCode3"), sourceColumn("BBG Code 4", "bbgCode4"), sourceColumn("BBG Code 5", "bbgCode5"), sourceColumn("Strike (%)", "strike"),
       { label: "Barrier Type", value: record => citiBarrierType(recordValue(record, "barrierType")) }, sourceColumn("KI Barrier (%)", "kiBarrier"), sourceColumn("Observation Frequency (m)", "observationFrequency"), { label: "Non Callable Periods", value: record => numberOffset(recordValue(record, "guaranteedPeriods"), -1) }, sourceColumn("KO Barrier (%)", "koBarrier"), { label: "Memory Autocall", value: record => citiMemoryAutocall(recordValue(record, "koType")) }, { label: "Daily KO", value: record => citiDailyKo(recordValue(record, "koType")) }, sourceColumn("Coupon p.a. (%)", "coupon"), { label: "Upfront (%)", value: record => numberOffset(recordValue(record, "upfront"), 0, "", true) }, blankColumn("Notional Amount"), { label: "Format", value: record => recordValue(record, "product") ? "Citi US Issuer" : "" }, blankColumn("Swap Index"), blankColumn("Funding Spread (bps)"),
     ],
