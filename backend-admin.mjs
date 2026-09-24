@@ -308,6 +308,7 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
           <span>寄完→完成：<b>${formatDuration(record.durationsSeconds.sentToFinalized)}</b></span>
         </div>
         <p>外寄 ${record.outbound.sent}/${record.outbound.total}｜回信 ${record.inbound.total}（已解析 ${record.inbound.parsed}、逾時 ${record.inbound.late}、待人工 ${record.inbound.manualReview}、未配對 ${record.inbound.unmatched}）｜圖片 ${record.artifacts.ready}/${record.artifacts.total}</p>
+        <button type="button" class="secondary" data-parser-preview="${escapeHtml(record.rfqId)}">唯讀解析診斷（不改排名）</button><pre data-parser-preview-result hidden></pre>
         <div class="backend-timeline-issuers">${record.issuerStates.map(item => `<span class="issuer-state status-${item.status.toLowerCase()}"><b>${escapeHtml(item.issuer)}</b>${escapeHtml(item.status)}</span>`).join("")}</div>
         <small>建立 ${escapeHtml(formatDateTime(record.timestamps.createdAt))}｜排隊 ${escapeHtml(formatDateTime(record.timestamps.queuedAt))}｜首封 ${escapeHtml(formatDateTime(record.outbound.firstSentAt))}｜末封 ${escapeHtml(formatDateTime(record.outbound.lastSentAt))}｜截止 ${escapeHtml(formatDateTime(record.timestamps.deadlineAt))}</small>
         ${record.inbound.late > 0
@@ -578,6 +579,17 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
   });
   document.querySelector("#closeBackendRfqTimelines").addEventListener("click", () => adminTimelinesDialog.close());
   adminTimelinesList.addEventListener("click", async event => {
+    const previewButton = event.target.closest("[data-parser-preview]");
+    if (previewButton) {
+      const output = previewButton.parentElement.querySelector("[data-parser-preview-result]");
+      previewButton.disabled = true;
+      output.hidden = false;
+      output.textContent = "正在重新解析，既有排名不會變更…";
+      try { output.textContent = JSON.stringify(await request(`/admin/rfqs/${encodeURIComponent(previewButton.dataset.parserPreview)}/parser-preview`, { timeoutMs: 30000 }), null, 2); }
+      catch (error) { output.textContent = error.message; }
+      finally { previewButton.disabled = false; }
+      return;
+    }
     const button = event.target.closest("[data-admin-recalculate-rfq]");
     if (!button || getUser()?.role !== "ADMIN") return;
     if (!window.confirm("確定要以管理者身份將晚到報價納入新的排名版本嗎？")) return;

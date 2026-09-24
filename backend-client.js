@@ -363,7 +363,7 @@
 
   function loadImageController() {
     if (!imageControllerPromise) {
-      imageControllerPromise = import("./backend-image.mjs?v=render-fix-v1")
+      imageControllerPromise = import("./backend-image.mjs?v=review-fix-v1")
         .then(({ createImageController }) => createImageController({
           getRfqId: () => state.rfqId,
           request,
@@ -470,7 +470,7 @@
 
   function loadAdminController() {
     if (!adminControllerPromise) {
-      adminControllerPromise = import("./backend-admin.mjs?v=lifecycle-table-order-v1")
+      adminControllerPromise = import("./backend-admin.mjs?v=parser-preview-v1")
         .then(({ createAdminController }) => createAdminController({
           request,
           getUser: () => state.user,
@@ -1047,6 +1047,13 @@
         ? `正在等待最後郵件轉送｜${Math.floor(remaining / 60000)}:${String(Math.floor((remaining % 60000) / 1000)).padStart(2, "0")} 後正式排名`
         : `狀態：${payload.rfq.workflowStatus}｜詢價流程剩餘時間 ${Math.floor(remaining / 60000)}:${String(Math.floor((remaining % 60000) / 1000)).padStart(2, "0")}${softReminder}`;
     document.querySelector("#backendIssuerStates").innerHTML = payload.issuers.map(item => `<span class="issuer-state status-${item.status.toLowerCase()}"><b>${item.issuer}</b>${item.status}</span>`).join("");
+    const stageLabels = { OUTBOUND: "寄送詢價", PARSING: "郵件解析", NORMALIZATION: "報價條件校驗", IMAGE: "伺服器產圖排程" };
+    const delays = (payload.pipelineStages || []).map(item => ({ ...item,
+      severity: now - Date.parse(item.startedAt) >= 300000 ? "ATTENTION" : now - Date.parse(item.startedAt) >= 120000 ? "WARNING" : "NORMAL"
+    })).filter(item => item.severity !== "NORMAL");
+    if (delays.length) document.querySelector("#backendCountdown").textContent += "｜" + delays.map(item =>
+      `${stageLabels[item.stage] || "系統處理"}${item.severity === "ATTENTION" ? "已超過 5 分鐘，請管理者檢查" : "已超過 2 分鐘，仍在處理"}`
+    ).join("；");
     // Do not offer an early close during the final transport grace period.
     finalizeButton.hidden = !["WAITING", "PARTIAL"].includes(payload.rfq.workflowStatus) || inMailGrace;
     if (finalizeButton.hidden) hideFinalizeConfirmation();
@@ -1288,12 +1295,8 @@
       <div class="ranking-table-scroll">${resultsTableMarkup(payload, rankLimit)}</div>`;
   }
 
-  // A complete standalone document. The page stylesheet is not loaded inside the render iframe, so
-  // the export cannot inherit the dark theme however the viewer set the picker -- the same guarantee
-  // styles-dark.css gives the card sheet through pinning rules, obtained here by isolation instead.
-  // The literal px sizes are the ADR 0042 exception for a PNG render surface: a token change must
-  // never alter an image already sent to a client. Colours are the opaque equivalents of the light
-  // tokens, because html2canvas composites translucent values unpredictably.
+  // Keep one column/value definition for the screen and export. The native table renderer extracts
+  // text from this detached document; it neither executes this HTML nor inherits the page theme.
   function tableSheetDocument() {
     const rfq = state.latestResultsRfq;
     const trades = state.latestResultTrades;

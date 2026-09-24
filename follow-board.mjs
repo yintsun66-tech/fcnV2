@@ -8,6 +8,22 @@ const API_ORIGINS = location.hostname === "app.yintsun66.com"
     : ["https://app.yintsun66.com", "https://api.yintsun66.com"];
 const IS_STATIC_SITE = location.hostname === "yintsun66-tech.github.io";
 const PIN_STORAGE_KEY = "fcn-follow-board-pin";
+
+// A browser that blocks site data -- a "block all cookies" setting or a managed-device policy, both
+// likely on bank machines -- throws SecurityError the moment sessionStorage is touched. The first
+// read runs while this module is still being evaluated, so an unguarded access there aborted the
+// whole page: the PIN form never got its handler. Remembering the PIN is only a reload convenience,
+// so when storage is unavailable the board simply asks for it again.
+function readStoredPin() {
+  try { return sessionStorage.getItem(PIN_STORAGE_KEY) || ""; } catch { return ""; }
+}
+function storePin(pin) {
+  try { sessionStorage.setItem(PIN_STORAGE_KEY, pin); } catch { /* not remembered across reloads */ }
+}
+function forgetStoredPin() {
+  try { sessionStorage.removeItem(PIN_STORAGE_KEY); } catch { /* nothing could have been stored */ }
+}
+
 const API_TIMEOUT_MS = 15_000;
 const previewProductCode = new URLSearchParams(location.search).get("product")?.normalize("NFKC").trim().toUpperCase() || "";
 const THEMES = {
@@ -34,7 +50,7 @@ const elements = Object.fromEntries([
 ].map(id => [id, document.getElementById(id)]));
 
 const state = {
-  pin: sessionStorage.getItem(PIN_STORAGE_KEY) || "",
+  pin: readStoredPin(),
   manifest: null,
   selectedProduct: null,
   user: null
@@ -237,14 +253,14 @@ async function loadManifest() {
 async function unlock(pin) {
   state.pin = pin;
   await loadManifest();
-  sessionStorage.setItem(PIN_STORAGE_KEY, pin);
+  storePin(pin);
   elements.pinGate.hidden = true;
   elements.boardContent.hidden = false;
   await detectAdminSession();
 }
 
 function lock() {
-  sessionStorage.removeItem(PIN_STORAGE_KEY);
+  forgetStoredPin();
   state.pin = "";
   state.manifest = null;
   state.selectedProduct = null;
@@ -507,7 +523,7 @@ if (IS_STATIC_SITE) {
 
 if (/^\d{4}$/.test(state.pin)) {
   unlock(state.pin).catch(() => {
-    sessionStorage.removeItem(PIN_STORAGE_KEY);
+    forgetStoredPin();
     state.pin = "";
   });
 }

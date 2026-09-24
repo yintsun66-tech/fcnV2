@@ -1,4 +1,6 @@
 import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
+import { renderQuoteCards } from "./quote-card-canvas.mjs?v=canvas-v1";
+import { renderQuoteTable, tableModelFromDocument } from "./quote-table-canvas.mjs?v=review-fix-v1";
 
 const CARD_RENDER_STEP_TIMEOUT_MS = 12_000;
 const CARD_RENDER_TOTAL_TIMEOUT_MS = 24_000;
@@ -71,7 +73,11 @@ export function createImageController({
   }
 
   function showCardImage(blob, filename) {
-    const url = URL.createObjectURL(blob);
+    showImages([{ blob, filename }]);
+  }
+
+  function showImages(images) {
+    const entries = images.map(image => ({ ...image, url: URL.createObjectURL(image.blob) }));
     progressDialog.querySelector("[data-card-preview] [data-card-close]")?.click();
     const preview = document.createElement("section");
     preview.className = "backend-card-preview";
@@ -82,11 +88,11 @@ export function createImageController({
     preview.innerHTML = `<section class="backend-panel">
       <div class="backend-results-heading"><div><p class="eyebrow">QUOTE IMAGE</p><h2>報價圖</h2></div><button type="button" class="secondary" data-card-close>關閉</button></div>
       <p class="backend-archive-note">手機或平板請「長按圖片 → 儲存影像」；電腦可在新頁面檢視，圖片會依螢幕大小縮放。</p>
-      <div class="backend-card-preview-frame"><img alt="報價圖" src="${url}"></div>
+      ${entries.map(({ url, filename }, index) => `<div class="backend-card-preview-frame"><img alt="報價圖 ${index + 1}" src="${url}"></div>
       <div class="backend-card-preview-actions">
         <a class="artifact-link backend-card-open-link" href="${url}" target="_blank" rel="noopener">在新頁面檢視</a>
         <a class="artifact-link" href="${url}" download="${escapeHtml(filename)}">下載 PNG</a>
-      </div>
+      </div>`).join("")}
     </section>`;
     progressDialog.append(preview);
     const onKeydown = event => {
@@ -98,7 +104,7 @@ export function createImageController({
     const close = () => {
       document.removeEventListener("keydown", onKeydown, true);
       preview.remove();
-      URL.revokeObjectURL(url);
+      entries.forEach(({ url }) => URL.revokeObjectURL(url));
     };
     preview.querySelector("[data-card-close]").addEventListener("click", close);
     document.addEventListener("keydown", onKeydown, true);
@@ -167,17 +173,23 @@ export function createImageController({
 
   async function renderCardLocally(rfqId, tradeCode, quoteId) {
     const deadlineAt = Date.now() + CARD_RENDER_TOTAL_TIMEOUT_MS;
-    const [{ card }, html2canvas] = await Promise.all([
-      requestForRender(
+    const { card } = await requestForRender(
         `/rfqs/${rfqId}/trades/${encodeURIComponent(tradeCode)}/quotes/${encodeURIComponent(quoteId)}/card`,
         {},
         RENDER_STEPS.CARD_FETCH,
         deadlineAt
-      ),
-      withRenderDeadline(() => loadHtml2Canvas(), RENDER_STEPS.LOADER, deadlineAt)
-    ]);
-    const blob = await rasterizeDocument(card.html, card.width, deadlineAt, html2canvas);
-    showCardImage(blob, `${rfqId}-${card.tradeCode}-${card.issuer}.png`);
+      );
+    if (!card.renderModel) {
+      const html2canvas = await withRenderDeadline(() => loadHtml2Canvas(), RENDER_STEPS.LOADER, deadlineAt);
+      const blob = await rasterizeDocument(card.html, card.width, deadlineAt, html2canvas);
+      showCardImage(blob, `${rfqId}-${card.tradeCode}-${card.issuer}.png`);
+      return;
+    }
+    let images;
+    try { images = await withRenderDeadline(() => renderQuoteCards(card.renderModel), RENDER_STEPS.DRAW, deadlineAt); }
+    catch (error) { if (!error.renderStep) error.renderStep = "DRAW"; throw error; }
+    if (images.length !== 1) throw renderError("請逐筆交易產圖。", RENDER_STEPS.DRAW);
+    showCardImage(images[0].blob, `${rfqId}-${card.tradeCode}-${card.issuer}.png`);
   }
 
   function clientDeviceClass() {
@@ -207,7 +219,7 @@ export function createImageController({
 
   async function requestArtifact(target) {
     const rfqId = getRfqId();
-    if (!target || !rfqId || !target.dataset.artifactQuote) return;
+    if (!target || target.disabled || !rfqId || !target.dataset.artifactQuote) return;
     const originalLabel = target.textContent;
     const { artifactTrade, artifactQuote } = target.dataset;
     const status = document.querySelector("#backendCountdown");
@@ -247,7 +259,7 @@ export function createImageController({
   // exists server-side, and adding one would push this onto the metered Browser Rendering path that
   // ADR 0016 moved away from. A failure here leaves the on-screen table untouched.
   async function requestTableImage(target) {
-    if (!target || typeof buildTableSheet !== "function") return;
+    if (!target || target.disabled || typeof buildTableSheet !== "function") return;
     const status = document.querySelector("#backendCountdown");
     const originalLabel = target.textContent;
     target.disabled = true;
@@ -256,9 +268,11 @@ export function createImageController({
       const sheet = buildTableSheet();
       if (!sheet) throw new Error("目前沒有可產圖的正式排名結果。");
       const deadlineAt = Date.now() + CARD_RENDER_TOTAL_TIMEOUT_MS;
-      const html2canvas = await withRenderDeadline(() => loadHtml2Canvas(), RENDER_STEPS.LOADER, deadlineAt);
-      const blob = await rasterizeDocument(sheet.html, sheet.width, deadlineAt, html2canvas, { autoWidth: true });
-      showCardImage(blob, sheet.filename);
+      const images = await withRenderDeadline(
+        () => renderQuoteTable(tableModelFromDocument(sheet.html)), RENDER_STEPS.DRAW, deadlineAt,
+        CARD_RENDER_TOTAL_TIMEOUT_MS);
+      showImages(images.map(({ blob, page }) => ({ blob,
+        filename: images.length === 1 ? sheet.filename : sheet.filename.replace(/\.png$/i, `-${page}.png`) })));
     } catch (error) {
       if (status) status.textContent = error instanceof Error ? error.message : "表格圖產出失敗，請稍後再試。";
     } finally {
