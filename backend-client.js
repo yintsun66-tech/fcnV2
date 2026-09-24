@@ -30,7 +30,8 @@
     rfqListScope: "active",
     rfqListCursor: null,
     rfqListItems: [],
-    rfqListSummary: { activeCount: 0, unrankedLateReplyCount: 0 }
+    rfqListSummary: { activeCount: 0, unrankedLateReplyCount: 0 },
+    lateSummaryAt: 0
   };
   let imageControllerPromise = null;
   let analysisControllerPromise = null;
@@ -764,6 +765,7 @@
       state.rfqListItems = append ? state.rfqListItems.concat(payload.rfqs) : payload.rfqs;
       state.rfqListCursor = payload.nextCursor;
       setRfqBadge(payload.summary.activeCount, payload.summary.unrankedLateReplyCount);
+      state.lateSummaryAt = Date.now();
       rfqLoadMoreButton.hidden = !payload.nextCursor;
       renderRfqHistory();
     } catch (error) {
@@ -772,12 +774,20 @@
     }
   }
 
-  async function refreshRfqBadge() {
+  // The late-reply count is the expensive half of the badge: the server checks every RFQ the user
+  // has ever made, so its cost grows with history, and fetched every 30 seconds it was 42% of all
+  // D1 reads. A late reply is late by definition, so it is refreshed every ten minutes and on the
+  // events that can change it; the other polls send late=0 and fetch only the active count.
+  async function refreshRfqBadge({ includeLate = false } = {}) {
     clearTimeout(state.badgeTimer);
     if (!state.user || document.hidden) return;
+    const withLate = includeLate || Date.now() - state.lateSummaryAt >= 600_000;
     try {
-      const payload = await request("/rfqs/summary");
-      setRfqBadge(payload.activeCount, payload.unrankedLateReplyCount);
+      const payload = await request(withLate ? "/rfqs/summary" : "/rfqs/summary?late=0");
+      if (withLate) state.lateSummaryAt = Date.now();
+      setRfqBadge(payload.activeCount, withLate
+        ? payload.unrankedLateReplyCount
+        : state.rfqListSummary.unrankedLateReplyCount);
     } catch {
       setRfqBadge(0);
     } finally {
@@ -879,7 +889,8 @@
     hideFinalizeConfirmation();
     if (progressDialog.open) progressDialog.close();
     if (updateUrl) updateRfqUrl(null);
-    void refreshRfqBadge();
+    // Leaving a result may follow a late-reply recalculation, which clears its late count.
+    void refreshRfqBadge({ includeLate: true });
   }
 
   async function restoreRfqFromUrl() {
@@ -897,7 +908,7 @@
       const user = (await request("/auth/session")).user;
       setUser(user);
       if (user.passwordChangeRequired) return;
-      void refreshRfqBadge();
+      void refreshRfqBadge({ includeLate: true });
       await restoreRfqFromUrl();
     }
     catch { setUser(null); showAuthPanel("login"); showAuth(); }
@@ -1626,7 +1637,7 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
       setUser(user);
       document.querySelector("#backendAuthError").textContent = "";
       if (user.passwordChangeRequired) return;
-      void refreshRfqBadge();
+      void refreshRfqBadge({ includeLate: true });
       await restoreRfqFromUrl();
     }
     catch (error) { document.querySelector("#backendAuthError").textContent = error.message; }
