@@ -8,11 +8,11 @@
     <link rel="icon" href="./icon.svg?v=icon-v1" type="image/svg+xml" />
     <link rel="icon" href="./icon-32.png?v=icon-v1" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=icon-v1" />
-    <link rel="stylesheet" href="./styles.css?v=issuer-palette-v1" />
+    <link rel="stylesheet" href="./styles.css?v=form-restore-v1" />
     <link
       id="darkSheet"
       rel="stylesheet"
-      href="./styles-dark.css?v=market-holidays-v2"
+      href="./styles-dark.css?v=form-restore-v1"
       media="(prefers-color-scheme: dark)"
     />
     <script>
@@ -67,19 +67,26 @@
       </aside>
 
       <section class="notice" aria-label="填寫說明">
-        <strong>求值規則：</strong>以空白欄位表示求值；每筆交易的價格相關欄位必須且只能留一欄空白。
+        <strong>求值規則：</strong>請先選擇要求值的欄位；系統會自動將該欄留白並鎖定，避免誤填。
         <button id="showHelp" type="button" class="link-button">查看詳細規則</button>
       </section>
 
       <section class="toolbar" aria-label="交易操作">
-        <button id="addRow" type="button" class="secondary">＋ 新增一筆交易</button>
-        <button id="removeRow" type="button" class="secondary">－ 刪除最後一筆</button>
-        <button id="clearSavedDraft" type="button" class="secondary">清除本機暫存</button>
-        <button id="confirmAllQuotes" type="button" class="manual-email-button">手動貼郵件詢價</button>
-        <button id="sendQuotes" type="button" class="primary">發送詢價條件</button>
-        <button id="generateQuoteImage" type="button" class="quote-image-button">產出報價圖</button>
-        <a class="secondary guide-link" href="./follow-board.html">跟單專區</a>
-        <a class="secondary guide-link" href="./guide.html" target="_blank" rel="noopener">使用說明</a>
+        <div class="toolbar-primary">
+          <button id="sendQuotes" type="button" class="primary">發送詢價條件</button>
+          <button id="generateQuoteImage" type="button" class="quote-image-button">產出報價圖</button>
+          <button id="toolbarMoreToggle" type="button" class="secondary toolbar-more-toggle" aria-expanded="false" aria-controls="toolbarMore">
+            更多 <span aria-hidden="true">•••</span>
+          </button>
+        </div>
+        <div id="toolbarMore" class="toolbar-more">
+          <button id="addRow" type="button" class="secondary">＋ 新增一筆交易</button>
+          <button id="removeRow" type="button" class="secondary">－ 刪除最後一筆</button>
+          <button id="clearSavedDraft" type="button" class="secondary">清除本機暫存</button>
+          <button id="confirmAllQuotes" type="button" class="manual-email-button">手動貼郵件詢價</button>
+          <a class="secondary guide-link" href="./follow-board.html">跟單專區</a>
+          <a class="secondary guide-link" href="./guide.html" target="_blank" rel="noopener">使用說明</a>
+        </div>
       </section>
 
       <section id="staticIdentityNotice" class="notice" hidden aria-label="靜態版詢價身分">
@@ -123,6 +130,7 @@
             <p class="eyebrow">TRADE INPUT WORKSPACE</p>
             <h2>交易條件</h2>
             <p>每筆交易依序填寫基本條件、連結標的、收益條件與風險交割設定。</p>
+            <p class="fixed-terms-summary">固定條件：每月觀察｜OTC Note｜生效日 T+7</p>
           </div>
           <div class="field-group-legend" aria-label="欄位分區說明">
             <span class="legend-basic">基本條件</span>
@@ -149,11 +157,8 @@
                 <th scope="col">Currency *</th>
                 <th scope="col">Trade Date *</th>
                 <th scope="col">Tenor (m) *</th>
-                <th scope="col">BBG Code 1 *</th>
-                <th scope="col">BBG Code 2</th>
-                <th scope="col">BBG Code 3</th>
-                <th scope="col">BBG Code 4</th>
-                <th scope="col">BBG Code 5</th>
+                <th scope="col">連結標的 *</th>
+                <th scope="col">求值欄位 *</th>
                 <th scope="col">Strike (%)</th>
                 <th scope="col">KO Type *</th>
                 <th scope="col">KO Barrier (%)</th>
@@ -194,9 +199,9 @@
       <div class="dialog-content">
         <h2>填寫規則</h2>
         <ul>
-          <li>每筆至少填寫一個 BBG Code；輸入美股 ticker 後會依交易所查詢檔自動補正，例如 <code>AAPL</code> → <code>AAPL UW</code>。</li>
-          <li>Barrier Type 為 EKI／AKI：Strike、KO Barrier、Coupon、Upfront / NotePrice、KI Barrier 五欄中，必須且只能空白一欄。</li>
-          <li>Barrier Type 為 NONE：KI Barrier 必須空白；Strike、KO Barrier、Coupon、Upfront / NotePrice 四欄中，必須且只能空白一欄。</li>
+          <li>每筆至少填寫一個連結標的；需要更多標的時按「＋ 新增標的」，最多五個。輸入美股 ticker 後會依交易所查詢檔自動補正，例如 <code>AAPL</code> → <code>AAPL UW</code>。</li>
+          <li>請使用「求值欄位」選擇器指定 Strike、KO Barrier、Coupon、Upfront / NotePrice 或 KI Barrier；系統會自動將該欄留白。</li>
+          <li>Barrier Type 為 NONE 時，KI Barrier 不適用；選擇 EKI／AKI 後才會顯示並可選為求值欄位。</li>
           <li>Observation Frequency、OTC、Effective Date Offset 分別固定為 1、Note、7。</li>
         </ul>
         <button id="closeHelp" type="button" class="primary">知道了</button>
@@ -292,7 +297,7 @@
     </dialog>
 
     <script type="module" src="./market-holidays.mjs?v=market-holidays-v1"></script>
-    <script type="module" src="./app.js?v=hsbc-dra-v1"></script>
+    <script type="module" src="./app.js?v=form-restore-v1"></script>
     <script type="module" src="./earnings-advisory.mjs?v=undo-resume-v1"></script>
     <script type="module">
       if (location.hostname === "app.yintsun66.com" || new URLSearchParams(location.search).get("backend") === "1") {

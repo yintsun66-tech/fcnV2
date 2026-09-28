@@ -55,6 +55,8 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
   const staticBranchName = document.querySelector("#staticBranchName");
   const staticEmployeeNumber = document.querySelector("#staticEmployeeNumber");
   const staticIdentityError = document.querySelector("#staticIdentityError");
+  const toolbarMoreToggle = document.querySelector("#toolbarMoreToggle");
+  const toolbarMore = document.querySelector("#toolbarMore");
   const isStaticSite = location.hostname !== "app.yintsun66.com"
     && new URLSearchParams(location.search).get("backend") !== "1";
   let selectedIssuer = "BNP";
@@ -180,11 +182,20 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     ["kiBarrier", "KI Barrier (%)"], ["observationFrequency", "Observation Frequency (m)"],
     ["otc", "OTC"], ["effectiveDateOffset", "Effective Date Offset (Calendar Days)"], ["tradeDate", "Trade Date"],
   ];
+  const targetFields = [
+    ["strike", "Strike (%)"],
+    ["koBarrier", "KO Barrier (%)"],
+    ["coupon", "Coupon p.a. (%)"],
+    ["upfront", "Upfront / NotePrice (%)"],
+    ["kiBarrier", "KI Barrier (%)"],
+  ];
+  const underlyingFieldNames = ["bbgCode1", "bbgCode2", "bbgCode3", "bbgCode4", "bbgCode5"];
   const fieldGroups = {
     product: "basic", currency: "basic", tradeDate: "basic", tenor: "basic",
     bbgCode1: "underlying", bbgCode2: "underlying", bbgCode3: "underlying", bbgCode4: "underlying", bbgCode5: "underlying",
     strike: "payoff", koType: "payoff", koBarrier: "payoff", coupon: "payoff", upfront: "payoff",
     guaranteedPeriods: "risk", barrierType: "risk", kiBarrier: "risk", observationFrequency: "risk", otc: "risk", effectiveDateOffset: "risk",
+    targetField: "payoff",
   };
 
   const sourceColumn = (label, name) => ({ label, value: row => rowValue(row, name) });
@@ -250,6 +261,25 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
   const input = (name, attrs = "") => `<input name="${name}" ${attrs}>`;
   const options = (values, selected) => values.map(v => `<option ${v === selected ? "selected" : ""}>${v}</option>`).join("");
   const select = (name, values, selected) => `<select name="${name}">${options(values, selected)}</select>`;
+  const targetSelect = () => `<select name="targetField" aria-label="求值欄位">
+    <option value="">請選擇</option>
+    ${targetFields.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}
+  </select>`;
+
+  function underlyingEditor() {
+    const items = underlyingFieldNames.map((name, index) => `
+      <div class="underlying-item" data-underlying-index="${index}"${index ? " hidden" : ""}>
+        <span class="underlying-number" aria-hidden="true">${index + 1}</span>
+        ${input(name, `autocomplete="off" placeholder="${index ? "例如 NVDA" : "例如 AAPL"}"`)}
+        <button type="button" class="underlying-remove" data-remove-underlying="${index}" aria-label="移除第 ${index + 1} 個連結標的">−</button>
+      </div>`).join("");
+    return `<fieldset class="underlying-editor">
+      <legend class="field-label-text">連結標的</legend>
+      <div class="underlying-list">${items}</div>
+      <button type="button" class="underlying-add" data-add-underlying>＋ 新增標的</button>
+      <small>至少 1 個，最多 5 個</small>
+    </fieldset>`;
+  }
 
   function formatDate(date = new Date()) {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -313,9 +343,11 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
 
   /** Every field of every row, in order — enough to put the table back exactly as it was. */
   function snapshotRows() {
-    return [...tableBody.rows].map(row => Object.fromEntries(
-      fields.map(([name]) => [name, rowField(row, name).value])
-    ));
+    return [...tableBody.rows].map(row => ({
+      ...Object.fromEntries(fields.map(([name]) => [name, rowField(row, name).value])),
+      targetField: rowValue(row, "targetField"),
+      underlyingCount: Number(row.dataset.underlyingCount || 1),
+    }));
   }
 
   function restoreRows(rows) {
@@ -327,7 +359,11 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
         const field = rowField(row, name);
         if (field) field.value = value;
       });
-      decorateRow(row);
+      // Rows handed over by re-quote carry no target selection: the term the issuers were asked to
+      // price arrives as the one blank, so infer it the way a version-1 draft is restored. A snapshot
+      // taken from the form always carries its own selection, even an empty one.
+      if (!Object.hasOwn(values, "targetField")) rowField(row, "targetField").value = inferTargetField(row);
+      syncRowUi(row, Number(values.underlyingCount) || undefined);
     });
     if (!tableBody.rows.length) createRow();
     renumberRows();
@@ -416,12 +452,9 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
       <td>${select("currency", ["USD", "JPY", "EUR", "HKD", "CNH", "CAD", "GBP", "AUD", "ZAR"], "USD")}</td>
       <td>${input("tradeDate", `value="${formatDate()}" placeholder="DD-MMM-YY" required`)}</td>
       <td>${input("tenor", 'type="number" min="1" max="24" value="12" required')}</td>
-      <td>${input("bbgCode1", 'autocomplete="off" placeholder="例如 AAPL" required')}</td>
-      <td>${input("bbgCode2", 'autocomplete="off" placeholder="選填"')}</td>
-      <td>${input("bbgCode3", 'autocomplete="off" placeholder="選填"')}</td>
-      <td>${input("bbgCode4", 'autocomplete="off" placeholder="選填"')}</td>
-      <td>${input("bbgCode5", 'autocomplete="off" placeholder="選填"')}</td>
-      <td>${input("strike", 'type="number" min="50" max="100" step="0.01" placeholder="求值留白"')}</td>
+      <td class="quote-field group-underlying" data-field="underlyings">${underlyingEditor()}</td>
+      <td>${targetSelect()}</td>
+      <td>${input("strike", 'type="number" min="50" max="100" step="0.01" placeholder="請先選求值欄位"')}</td>
       <td>${select("koType", ["Daily", "Daily Memory", "Period End", "Period End Memory"], "Daily Memory")}</td>
       <td>${input("koBarrier", 'type="number" step="0.01" placeholder="求值留白"')}</td>
       <td>${input("coupon", 'type="number" step="0.01" placeholder="求值留白"')}</td>
@@ -438,7 +471,9 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
       fields.forEach(([name]) => {
         rowField(row, name).value = rowField(firstRow, name).value;
       });
+      rowField(row, "targetField").value = rowValue(firstRow, "targetField");
     }
+    syncRowUi(row, firstRow ? Number(firstRow.dataset.underlyingCount) : 1);
     renumberRows();
   }
 
@@ -518,13 +553,15 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
   function rowField(row, name) { return row.querySelector(`[name="${name}"]`); }
 
   function saveDraft() {
-    const rows = [...tableBody.rows].map(row => Object.fromEntries(
-      fields
+    const rows = [...tableBody.rows].map(row => ({
+      ...Object.fromEntries(fields
         .filter(([name]) => name !== "tradeDate")
-        .map(([name]) => [name, rowField(row, name).value])
-    ));
+        .map(([name]) => [name, rowField(row, name).value])),
+      targetField: rowValue(row, "targetField"),
+      underlyingCount: Number(row.dataset.underlyingCount || 1),
+    }));
     try {
-      window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ version: 1, rows }));
+      window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ version: 2, rows }));
     } catch {
       setStatus("瀏覽器無法使用本機暫存；輸入資料不會在下次開啟時保留。");
     }
@@ -556,15 +593,21 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
       const savedDraft = window.localStorage.getItem(DRAFT_STORAGE_KEY);
       if (!savedDraft) return false;
       const { version, rows } = JSON.parse(savedDraft);
-      if (version !== 1 || !Array.isArray(rows) || !rows.length) return false;
+      if (![1, 2].includes(version) || !Array.isArray(rows) || !rows.length) return false;
       rows.slice(0, MAX_ROWS).forEach(values => {
         if (!values || typeof values !== "object") return;
         createRow();
+        const row = tableBody.lastElementChild;
         fields.forEach(([name]) => {
           if (name !== "tradeDate" && typeof values[name] === "string") {
-            rowField(tableBody.lastElementChild, name).value = values[name];
+            rowField(row, name).value = values[name];
           }
         });
+        const savedTarget = version === 2 && typeof values.targetField === "string"
+          ? values.targetField
+          : inferTargetField(row);
+        rowField(row, "targetField").value = savedTarget;
+        syncRowUi(row, Number(values.underlyingCount) || undefined);
       });
       return tableBody.rows.length > 0;
     } catch {
@@ -587,8 +630,94 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     setStatus("已清除本機暫存與目前輸入資料。", true);
   }
 
+  function syncUnderlyingEditor(row, preferredCount) {
+    const highestFilled = underlyingFieldNames.reduce((highest, name, index) => (
+      rowValue(row, name) ? index + 1 : highest
+    ), 0);
+    const count = Math.min(5, Math.max(1, Number(preferredCount) || highestFilled || 1, highestFilled));
+    row.dataset.underlyingCount = String(count);
+    row.querySelectorAll(".underlying-item").forEach((item, index) => {
+      item.hidden = index >= count;
+      item.querySelector(".underlying-remove").hidden = count === 1;
+    });
+    const addButton = row.querySelector("[data-add-underlying]");
+    if (addButton) addButton.hidden = count >= 5;
+  }
+
+  function inferTargetField(row) {
+    const barrierType = rowValue(row, "barrierType");
+    const candidates = barrierType === "NONE"
+      ? targetFields.filter(([name]) => name !== "kiBarrier")
+      : targetFields;
+    const blankFields = candidates.filter(([name]) => !rowValue(row, name));
+    return blankFields.length === 1 ? blankFields[0][0] : "";
+  }
+
+  function syncTargetField(row) {
+    const selector = rowField(row, "targetField");
+    const selected = selector.value;
+    const previous = row.dataset.targetField || "";
+
+    if (previous && previous !== selected) {
+      const previousField = rowField(row, previous);
+      previousField.readOnly = false;
+      previousField.classList.remove("is-target-field");
+      if (!previousField.value && Object.hasOwn(previousField.dataset, "valueBeforeTarget")) {
+        previousField.value = previousField.dataset.valueBeforeTarget;
+      }
+      delete previousField.dataset.valueBeforeTarget;
+    }
+
+    targetFields.forEach(([name]) => {
+      const field = rowField(row, name);
+      const isTarget = name === selected;
+      if (isTarget && previous !== selected) {
+        field.dataset.valueBeforeTarget = field.value;
+        field.value = "";
+      }
+      field.readOnly = isTarget;
+      field.classList.toggle("is-target-field", isTarget);
+      field.placeholder = field.disabled ? "不適用" : (isTarget ? "詢價中" : "輸入條件");
+    });
+    row.dataset.targetField = selected;
+  }
+
+  function syncConditionalFields(row) {
+    const isNone = rowValue(row, "barrierType") === "NONE";
+    const kiField = rowField(row, "kiBarrier");
+    const kiCell = kiField.closest("td");
+    const targetSelector = rowField(row, "targetField");
+    const kiOption = targetSelector.querySelector('option[value="kiBarrier"]');
+
+    kiOption.disabled = isNone;
+    kiCell.classList.toggle("is-conditionally-hidden", isNone);
+    if (isNone) {
+      if (targetSelector.value === "kiBarrier") {
+        targetSelector.value = "";
+        row.dataset.targetField = "";
+        delete kiField.dataset.valueBeforeTarget;
+        kiField.classList.remove("is-target-field");
+      }
+      kiField.value = "";
+      kiField.disabled = true;
+      kiField.placeholder = "不適用";
+    } else {
+      kiField.disabled = false;
+    }
+  }
+
+  function syncRowUi(row, preferredUnderlyingCount) {
+    syncUnderlyingEditor(row, preferredUnderlyingCount);
+    syncConditionalFields(row);
+    syncTargetField(row);
+  }
+
   function decorateRow(row) {
-    fields.forEach(([name, label]) => {
+    const decoratedFields = [
+      ...fields.filter(([name]) => !underlyingFieldNames.includes(name)),
+      ["targetField", "求值欄位"],
+    ];
+    decoratedFields.forEach(([name, label]) => {
       const field = rowField(row, name);
       const cell = field.closest("td");
       const fieldLabel = document.createElement("label");
@@ -601,6 +730,9 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
       field.setAttribute("aria-label", label);
       fieldLabel.append(labelText, field);
       cell.replaceChildren(fieldLabel);
+    });
+    underlyingFieldNames.forEach((name, index) => {
+      rowField(row, name).setAttribute("aria-label", `連結標的 ${index + 1}`);
     });
   }
 
@@ -633,7 +765,14 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     return /^Daily/i.test(value) ? "TRUE" : "FALSE";
   }
 
-  const fieldLabel = name => fields.find(([key]) => key === name)?.[1] || name;
+  // Messages name a field the way the form shows it. The target selector has no entry in `fields`,
+  // and the five codes are one "連結標的" editor on screen; `fields` keeps its labels unchanged
+  // because they also name the email columns.
+  const displayLabels = {
+    targetField: "求值欄位",
+    ...Object.fromEntries(underlyingFieldNames.map((name, index) => [name, `連結標的 ${index + 1}`])),
+  };
+  const fieldLabel = name => displayLabels[name] || fields.find(([key]) => key === name)?.[1] || name;
   let validationMessage = "";
 
   function clearFieldErrors(root = tableBody) {
@@ -718,11 +857,17 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     const quoteFields = get("barrierType") === "NONE"
       ? ["strike", "koBarrier", "coupon", "upfront"]
       : ["strike", "koBarrier", "coupon", "upfront", "kiBarrier"];
-    const blanks = quoteFields.filter(name => !get(name));
-    if (blanks.length !== 1) {
-      markInvalid(row, blanks.length ? blanks : quoteFields, blanks.length
-        ? `目前有 ${blanks.length} 欄空白；請只保留一欄求值，其餘填入條件。`
-        : "目前沒有空白求值欄；請將其中一欄留白求值。");
+    // The target is chosen explicitly (a UI-only selector); the email and API still derive it from
+    // the one blank price term, so the checks below keep that contract exact.
+    const targetField = get("targetField");
+    if (!targetField) markInvalid(row, "targetField", "請先選擇本筆交易的求值欄位。");
+    if (!quoteFields.includes(targetField)) {
+      markInvalid(row, "targetField", "目前 Barrier Type 不適用所選的求值欄位。");
+    }
+    if (get(targetField)) markInvalid(row, targetField, "求值欄位必須保持空白。");
+    const missingNonTargets = quoteFields.filter(name => name !== targetField && !get(name));
+    if (missingNonTargets.length) {
+      markInvalid(row, missingNonTargets, `還有 ${missingNonTargets.length} 欄價格條件未填；除求值欄位外皆須填寫。`);
     }
   }
 
@@ -1193,6 +1338,33 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     } catch (error) { setStatus(error.message); }
   }
 
+  function setToolbarMoreExpanded(expanded) {
+    toolbarMoreToggle.setAttribute("aria-expanded", String(expanded));
+    toolbarMore.classList.toggle("is-open", expanded);
+  }
+
+  toolbarMoreToggle.addEventListener("click", () => {
+    setToolbarMoreExpanded(toolbarMoreToggle.getAttribute("aria-expanded") !== "true");
+  });
+  toolbarMore.addEventListener("click", event => {
+    if (event.target.closest("button,a") && window.matchMedia("(max-width: 760px)").matches) {
+      setToolbarMoreExpanded(false);
+    }
+  });
+
+  // backend-client.js intercepts this button in Cloudflare mode. Validate in capture phase first so
+  // both the static and backend paths enforce the same explicit target-field contract.
+  document.addEventListener("click", event => {
+    if (!event.target.closest("#sendQuotes")) return;
+    try {
+      [...tableBody.rows].forEach(validateRow);
+    } catch (error) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setStatus(error.message);
+    }
+  }, true);
+
   document.querySelector("#addRow").addEventListener("click", () => {
     if (tableBody.rows.length >= MAX_ROWS) return setStatus("最多只能新增 20 筆詢價交易。");
     createRow(true);
@@ -1290,11 +1462,50 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     const row = event.target.closest("tr");
     if (row) setActiveTrade([...tableBody.rows].indexOf(row));
     if (/^bbgCode[1-5]$/.test(event.target.name)) void ensureBbgLookup();
+    // The target term is locked blank so a request cannot go out with it filled. The static flow
+    // later fills that same term with the issuer's price to render a quote image, so say how.
+    if (event.target.classList?.contains("is-target-field")) {
+      setStatus("這一欄是求值欄位，已鎖定為空白。若要填入報價來產圖，請先把「求值欄位」改回「請選擇」。");
+    }
   });
   tableBody.addEventListener("blur", event => {
     if (/^bbgCode[1-5]$/.test(event.target.name)) void normaliseBbgCodeWhenReady(event.target);
     flushRowChanges();
   }, true);
+  tableBody.addEventListener("click", event => {
+    const addButton = event.target.closest("[data-add-underlying]");
+    const removeButton = event.target.closest("[data-remove-underlying]");
+    const row = event.target.closest("tr");
+    if (!row || (!addButton && !removeButton)) return;
+
+    if (addButton) {
+      const nextCount = Math.min(5, Number(row.dataset.underlyingCount || 1) + 1);
+      syncUnderlyingEditor(row, nextCount);
+      rowField(row, underlyingFieldNames[nextCount - 1]).focus();
+      scheduleRowChanges();
+      return;
+    }
+
+    const removeIndex = Number(removeButton.dataset.removeUnderlying);
+    const count = Number(row.dataset.underlyingCount || 1);
+    if (count <= 1 || !Number.isInteger(removeIndex)) return;
+    for (let index = removeIndex; index < underlyingFieldNames.length - 1; index += 1) {
+      rowField(row, underlyingFieldNames[index]).value = rowField(row, underlyingFieldNames[index + 1]).value;
+    }
+    rowField(row, underlyingFieldNames.at(-1)).value = "";
+    syncUnderlyingEditor(row, count - 1);
+    scheduleRowChanges();
+  });
+  tableBody.addEventListener("change", event => {
+    const row = event.target.closest("tr");
+    if (!row) return;
+    if (event.target.name === "barrierType") {
+      syncConditionalFields(row);
+      syncTargetField(row);
+    } else if (event.target.name === "targetField") {
+      syncTargetField(row);
+    }
+  });
   // Persisting the draft reads every field of every row, and the preview rebuilds the whole sheet.
   // Doing that on each keystroke makes typing visibly laggy once the table has many rows and the
   // preview panel is open, so coalesce the work; leaving a field still flushes it immediately.

@@ -88,21 +88,23 @@ dialog button.primary { background:var(--accent); color:#fff; }
 .email-clipboard-status { margin:12px 0; padding:10px; border-radius:7px; background:#e8f7f2; color:#12664f; font-weight:700; }.email-clipboard-status[data-state="none"],.email-clipboard-status[data-state="error"] { background:#fff1ed; color:#a3361d; }.email-compose-actions { display:grid; gap:10px; margin-top:14px; }.email-compose-actions label { margin:2px 0 0; }.email-compose-actions input { width:100%; min-height:42px; }.email-compose-actions small { color:#526778; line-height:1.55; }.email-compose-actions button { min-height:42px; border-radius:8px; padding:8px 14px; cursor:pointer; font-weight:bold; }
 .quote-preview-panel { margin-top:26px; padding:22px; border:1px solid #d5e1e7; border-radius:14px; background:#e9f1f5; }.preview-heading { display:flex; align-items:end; justify-content:space-between; gap:20px; margin-bottom:16px; }.preview-heading h2 { margin:2px 0 0; color:#073b5c; }.preview-heading p { margin:0; color:#52616b; }.preview-actions { display:flex; align-items:center; justify-content:flex-end; gap:14px; }.preview-issuer-button { min-height:42px; padding:9px 14px; border-radius:8px; cursor:pointer; font-weight:bold; white-space:nowrap; }.quote-capture-scroll { overflow:auto; border-radius:10px; box-shadow:0 8px 22px #173c5020; }.quote-sheet { --issuer-color:#00776d; --issuer-accent:#0a6ea8; --issuer-soft:#eaf8f5; width:1400px; min-height:750px; padding:38px; background:linear-gradient(145deg,#edf9f8 0,#ffffff 32%,#eff7fb 100%); color:#16313d; font-family:Arial,"Microsoft JhengHei",sans-serif; }.quote-sheet.theme-bnp { --issuer-color:#00965E; --issuer-accent:#046A43; --issuer-soft:#e7f8ef; }.quote-sheet.theme-barclays { --issuer-color:#00AEEF; --issuer-accent:#00395D; --issuer-soft:#e6f7fc; }.quote-sheet.theme-ms { --issuer-color:#002F6C; --issuer-accent:#003DA5; --issuer-soft:#e6ecf5; }.quote-sheet.theme-jpm { --issuer-color:#0b2545; --issuer-accent:#123a6b; --issuer-soft:#e7edf5; }.quote-sheet.theme-nomura { --issuer-color:#CA142A; --issuer-accent:#8a0f1e; --issuer-soft:#fbe7ea; }.quote-sheet.theme-ubs { --issuer-color:#E60000; --issuer-accent:#1a1a1a; --issuer-soft:#fbe8ea; }.quote-sheet.theme-dbs { --issuer-color:#FF3333; --issuer-accent:#9e1638; --issuer-soft:#fbe9ef; }.quote-sheet.theme-sg { --issuer-color:#E30613; --issuer-accent:#231F20; --issuer-soft:#fbe8ea; }.quote-sheet.theme-citi { --issuer-color:#003A72; --issuer-accent:#DB230B; --issuer-soft:#e8f0f7; }.quote-sheet.theme-gs { --issuer-color:#1a1a1a; --issuer-accent:#4d4d4d; --issuer-soft:#f0f0f0; }.quote-sheet.theme-ca { --issuer-color:#006F4E; --issuer-accent:#009B9D; --issuer-soft:#e6f5f1; }.quote-sheet.theme-hsbc { --issuer-color:#DB0011; --issuer-accent:#2b2b2b; --issuer-soft:#f9ecee; }.quote-sheet-header { display:flex; align-items:center; justify-content:space-between; padding:0 0 24px; border-bottom:5px solid var(--issuer-color); }.quote-sheet-header p { margin:0 0 5px; color:#246075; font-size:14px; font-weight:bold; letter-spacing:.12em; }.quote-sheet-header h2 { margin:0; color:var(--issuer-color); font-size:38px; letter-spacing:.02em; }.quote-sheet-header-note { display:flex; align-items:baseline; gap:9px; color:#256075; font-size:17px; }.quote-sheet-header-note strong { color:var(--issuer-accent); font-size:36px; }.quote-card-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:17px; padding-top:26px; }.quote-card { overflow:hidden; border:1px solid #b9d8df; border-radius:10px; background:#fff; box-shadow:0 3px 9px #0a67801f; }.quote-card-header { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:66px; padding:13px 15px; color:#fff; background:linear-gradient(125deg,var(--issuer-color),var(--issuer-accent)); }.quote-card-header strong { display:block; font-size:24px; }.quote-card-header small { font-size:15px; opacity:.92; }.quote-card-number { display:inline-block; margin-right:5px; font-size:14px; font-weight:bold; opacity:.8; }.quote-card-issuer { max-width:96px; text-align:right; font-size:15px; font-weight:bold; letter-spacing:.03em; }.quote-card-summary { display:grid; grid-template-columns:1fr 1fr; background:var(--issuer-soft); }.quote-card-summary div { padding:13px 15px; }.quote-card-summary div + div { border-left:1px solid #b9d8df; }.quote-card-summary span, .quote-detail > span { display:block; color:#286174; font-size:15px; }.quote-card-summary strong { display:block; margin-top:4px; font-size:24px; }.quote-highlight { color:var(--issuer-color); }.quote-card-details { display:grid; grid-template-columns:1fr 1fr; }.quote-detail { min-height:76px; padding:13px 15px; border-top:1px solid #d4e7e9; }.quote-detail:nth-child(odd) { border-right:1px solid #d4e7e9; }.quote-detail strong{ display:inline-block; margin-top:5px; font-size:var(--text-title3); }.quote-detail em{ display:block; margin-top:3px; color:var(--issuer-color); font-size:var(--text-subheadline); font-style:normal; }.quote-detail.underlyings { grid-column:1 / -1; min-height:102px; }.quote-detail ul { display:flex; flex-wrap:wrap; gap:7px 10px; padding:0; margin:8px 0 0; list-style:none; }.quote-detail li{ padding:5px 9px; border-radius:4px; background:#e4f2f4; color:#155066; font-size:var(--text-headline); font-weight:bold; }.quote-dac-note{ margin:5px 0 0; color:#1b7180; font-size:var(--text-footnote); line-height:1.35; }.quote-card-footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; padding:11px 15px; background:#eaf4f6; color:#236074; font-size:13px; }.quote-card-maker { flex:1 0 100%; padding-top:7px; border-top:1px solid #c8dfe4; text-align:left; font-weight:bold; }.quote-sheet-disclaimer { margin-top:24px; color:#286174; font-size:13px; text-align:right; }
 .guide-shell { max-width:1040px; margin:0 auto; padding:32px 24px 48px; }.guide-shell h1 { color:#073b5c; margin:20px 0 8px; }.guide-intro { color:#52616b; }.back-link { color:#075c8a; font-weight:bold; }.guide-section { margin-top:24px; padding:22px; background:#fff; border:1px solid #d5e1e7; border-radius:12px; line-height:1.6; }.guide-section h2 { margin-top:0; color:#0b4a6f; }.guide-table-scroll { overflow:auto; }.guide-table { min-width:650px; width:100%; border-collapse:collapse; }.guide-table th { position:static; background:#0b4a6f; color:#fff; }.guide-table td, .guide-table th { border:1px solid #d5e1e7; padding:10px; text-align:left; vertical-align:top; }.guide-table td:first-child { position:static; min-width:190px; background:#eef5f8; text-align:left; }
-@media (min-width: 761px) {
+@media (min-width: 1200px) {
   .app-shell { max-width:1920px; padding:20px; }
   .entry-workspace { padding:14px; }
   .table-card { overflow:hidden; border:1px solid #b9d4da; border-radius:12px; background:#fff; box-shadow:0 7px 18px #0b536018; }
   .table-scroll { overflow-x:auto; overflow-y:visible; scrollbar-gutter:stable; overscroll-behavior-inline:contain; }
-  #quoteTable { display:table; width:100%; min-width:1480px; table-layout:fixed; border-collapse:separate; border-spacing:0; }
+  #quoteTable { display:table; width:100%; min-width:1320px; table-layout:fixed; border-collapse:separate; border-spacing:0; }
   #quoteTable thead { display:table-header-group; }
   #quoteTable tbody { display:table-row-group; }
   #quoteTable tr { position:static; display:table-row; padding:0; border:0; border-radius:0; background:#fff; box-shadow:none; }
   #quoteTable th,
   #quoteTable td { display:table-cell; min-width:0; padding:5px 4px; border:0; border-right:1px solid #d8e6e8; border-bottom:1px solid #d8e6e8; vertical-align:middle; }
   #quoteTable th{ position:sticky; top:0; z-index:3; height:54px; padding:7px 5px; background:#1b7fa8; color:#fff; font-size:var(--text-caption); font-weight:600; line-height:1.15; text-align:center; white-space:normal; }
-  #quoteTable th:nth-child(n+6):nth-child(-n+10) { background:#0f8163; }
-  #quoteTable th:nth-child(n+11):nth-child(-n+16) { background:#0a7c8a; }
-  #quoteTable th:nth-child(n+17) { background:#2a6f78; }
+  /* Column 6 is the single linked-underlyings column (five BBG codes before); 7-12 are the target
+     selector and the payoff terms; 13 on are the risk terms. */
+  #quoteTable th:nth-child(6) { background:#0f8163; }
+  #quoteTable th:nth-child(n+7):nth-child(-n+12) { background:#0a7c8a; }
+  #quoteTable th:nth-child(n+13) { background:#2a6f78; }
   #quoteTable th:first-child { left:0; z-index:4; background:#06626e; }
   #quoteTable tbody tr:last-child td { border-bottom:0; }
   @media (hover:hover) and (pointer:fine){#quoteTable tbody tr:hover td:not(.row-number){ background:#eff9f8; }}
@@ -126,37 +128,38 @@ dialog button.primary { background:var(--accent); color:#fff; }
   #quoteTable input[type="number"]::-webkit-inner-spin-button,
   #quoteTable input[type="number"]::-webkit-outer-spin-button { margin:0; appearance:none; }
   #quoteTable th:nth-child(1) { width:34px; }
-  #quoteTable th:nth-child(2) { width:52px; }
-  #quoteTable th:nth-child(3) { width:54px; }
-  #quoteTable th:nth-child(4) { width:78px; }
-  #quoteTable th:nth-child(5) { width:44px; }
-  #quoteTable th:nth-child(n+6):nth-child(-n+10) { width:68px; }
-  #quoteTable th:nth-child(11) { width:54px; }
-  #quoteTable th:nth-child(12) { width:82px; }
-  #quoteTable th:nth-child(13),
-  #quoteTable th:nth-child(14),
-  #quoteTable th:nth-child(18),
-  #quoteTable th:nth-child(19) { width:58px; }
-  #quoteTable th:nth-child(15) { width:66px; }
-  #quoteTable th:nth-child(16) { width:64px; }
-  #quoteTable th:nth-child(17) { width:60px; }
-  #quoteTable th:nth-child(20) { width:50px; }
-  #quoteTable th:nth-child(21) { width:74px; }
+  #quoteTable th:nth-child(2) { width:58px; }
+  #quoteTable th:nth-child(3) { width:62px; }
+  #quoteTable th:nth-child(4) { width:82px; }
+  #quoteTable th:nth-child(5) { width:54px; }
+  #quoteTable th:nth-child(6) { width:210px; }
+  #quoteTable th:nth-child(7) { width:116px; }
+  #quoteTable th:nth-child(8),
+  #quoteTable th:nth-child(10),
+  #quoteTable th:nth-child(11),
+  #quoteTable th:nth-child(15) { width:68px; }
+  #quoteTable th:nth-child(9) { width:92px; }
+  #quoteTable th:nth-child(12),
+  #quoteTable th:nth-child(13) { width:78px; }
+  #quoteTable th:nth-child(14) { width:76px; }
+  #quoteTable th:nth-child(16),
+  #quoteTable th:nth-child(17) { width:54px; }
+  #quoteTable th:nth-child(18) { width:86px; }
 }
 
 /* Cloudflare 後端模式：只在 app.yintsun66.com 由 backend-client.js 顯示。 */
-/* Breakpoints — five, and each one earns its place.
+/* Breakpoints — six, and each one earns its place.
 
-   Add rules to an existing breakpoint rather than introducing a sixth. Plain CSS cannot read a
+   Add rules to an existing breakpoint rather than introducing another. Plain CSS cannot read a
    custom property inside a media query, so these cannot be tokens; this comment is the only
    place the set is written down.
 
      460px  very small phones — page chrome only (app shell, hero, toolbar, legend)
      600px  backend dialog internals get cramped (panels, lists, rankings, artifact viewer)
      700px  backend cards and metrics reflow (timeline, health grid, RFQ history)
-     760px  THE structural one: the 21-column table becomes stacked cards, fixed-value fields
-            hide, and the trade navigator appears. Paired with min-width: 761px, which carries
-            the table layout. ADR and CLAUDE.md both depend on this number — do not move it.
+     760px  Phones use a one-column card and the sticky trade navigator. Tablets keep cards.
+    1200px  Cards become the compact same-row desktop table. Fixed-value fields stay hidden at
+            every width and are represented by the visible fixed-terms summary.
      900px  entry-workspace header and legend stack. Paired with min-width: 901px.
 
    600 and 700 look mergeable and are not: both are backend-only, but merging them would push
@@ -215,6 +218,87 @@ dialog button.primary { background:var(--accent); color:#fff; }
 @media (max-width: 600px){.hotlist-controls{display:grid;grid-template-columns:1fr}.hotlist-widget iframe{height:420px}}
 .hotlist-exchanges{align-self:center;padding:6px 10px;border-radius:999px;background:#e4f6f1;color:#08745c;font-size:var(--text-footnote);font-weight:800}.hotlist-screens{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.hotlist-screens a{display:inline-flex;align-items:center;min-height:38px;padding:7px 13px;border:1px solid #9fcfca;border-radius:999px;background:#fff;color:#0b5570;font-size:var(--text-footnote);font-weight:800;text-decoration:none}@media (hover:hover) and (pointer:fine){.hotlist-screens a:hover,.hotlist-screens a:focus-visible{background:#e4f6f1;border-color:#078464}}
 @media (max-width: 600px){.hotlist-exchanges{align-self:start}.hotlist-screens a{flex:1 1 45%;justify-content:center}}
+
+/* SwiftUI-style trade entry ---------------------------------------------------------------
+   Keep the finance blue/green identity, but use an Apple-like hierarchy: one obvious action,
+   content-sized secondary controls, 44px touch targets and progressive disclosure. */
+.toolbar-primary,.toolbar-more { display:flex; flex-wrap:wrap; align-items:center; gap:9px; }
+.toolbar-more-toggle { display:none; }
+.underlying-editor { min-width:0; margin:0; padding:0; border:0; }
+.underlying-list { display:grid; gap:7px; }
+.underlying-item { display:grid; grid-template-columns:22px minmax(0,1fr) 36px; align-items:center; gap:6px; }
+.underlying-item[hidden],.underlying-add[hidden],.underlying-remove[hidden] { display:none !important; }
+.underlying-number { color:var(--label-2); font-size:var(--text-caption); font-weight:700; text-align:center; }
+#quoteTable .underlying-add,#quoteTable .underlying-remove {
+  min-height:36px; border:0; border-radius:8px; background:#128a6a1c; color:#0e6e54;
+  font-weight:700; cursor:pointer;
+}
+#quoteTable .underlying-add { width:100%; margin-top:7px; padding:7px 10px; }
+#quoteTable .underlying-remove { width:36px; padding:0; font-size:var(--text-body); }
+.underlying-editor small { display:block; margin-top:5px; color:var(--label-2); font-size:var(--text-caption2); }
+#quoteTable .quote-field[data-field="underlyings"] { grid-column:span 6; }
+#quoteTable .quote-field[data-field="targetField"] { grid-column:span 3; }
+#quoteTable .quote-field[data-field="targetField"] .field-label { background:#0a7c8a24; }
+#quoteTable input.is-target-field {
+  border-color:#0a7c8a; background:var(--accent-soft); color:var(--accent-strong); font-weight:700;
+}
+#quoteTable .is-conditionally-hidden { opacity:1; }
+.fixed-terms-summary { margin-top:7px !important; color:var(--accent-strong) !important; font-size:var(--text-footnote); font-weight:700; }
+/* On phones the sticky trade navigator already states the same fixed terms. */
+@media (max-width: 760px) { .fixed-terms-summary { display:none; } }
+#quoteTable .quote-field[data-field="observationFrequency"],
+#quoteTable .quote-field[data-field="otc"],
+#quoteTable .quote-field[data-field="effectiveDateOffset"] { display:none; }
+
+/* On cards, conditionally irrelevant fields disappear instead of remaining as disabled clutter. */
+@media (max-width: 1199px) {
+  #quoteTable .quote-field.is-conditionally-hidden { display:none; }
+}
+
+/* iPad/tablet: one transaction card with two input columns, never a horizontally-scrolled table. */
+@media (min-width: 761px) and (max-width: 1199px) {
+  .app-shell { max-width:980px; padding:22px; }
+  #quoteTable tbody { gap:20px; }
+  #quoteTable tr { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; padding:51px 16px 16px; }
+  #quoteTable .quote-field,
+  #quoteTable .quote-field[data-field] { grid-column:span 1; }
+  #quoteTable .quote-field[data-field="underlyings"] { grid-column:1 / -1; }
+  #quoteTable .field-label { min-height:82px; }
+  #quoteTable .underlying-editor { min-height:0; padding:11px; border-radius:var(--r-control); background:#128a6a16; }
+  #quoteTable .underlying-list { grid-template-columns:1fr 1fr; }
+  #quoteTable .underlying-editor > .field-label-text { display:block; margin-bottom:7px; }
+  #quoteTable .underlying-add,#quoteTable .underlying-remove { min-height:44px; }
+  #quoteTable .underlying-remove { width:44px; }
+  .table-card { overflow:visible; border:0; background:transparent; box-shadow:none; }
+}
+
+@media (min-width: 1200px) {
+  #quoteTable th:nth-child(n+16) { display:none; }
+  #quoteTable .quote-field.is-conditionally-hidden > * { visibility:hidden; }
+  #quoteTable .underlying-editor > .field-label-text,
+  #quoteTable .underlying-editor small { display:none; }
+  #quoteTable .underlying-add { min-height:32px; padding:5px 7px; font-size:var(--text-caption); }
+  #quoteTable .underlying-item { grid-template-columns:16px minmax(0,1fr) 30px; gap:3px; }
+  #quoteTable .underlying-remove { width:30px; min-height:32px; }
+}
+
+@media (max-width: 760px) {
+  .toolbar { display:block; padding:10px; background:#fffffff0; backdrop-filter:blur(18px) saturate(150%); -webkit-backdrop-filter:blur(18px) saturate(150%); }
+  .toolbar-primary { display:grid; grid-template-columns:1fr 1fr; }
+  .toolbar-primary #sendQuotes { grid-column:1 / -1; }
+  .toolbar-primary #generateQuoteImage,.toolbar-more-toggle { grid-column:span 1; }
+  .toolbar-more-toggle { display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+  .toolbar-more { display:none; grid-template-columns:1fr; gap:8px; margin-top:9px; padding-top:9px; border-top:1px solid var(--separator); }
+  .toolbar-more.is-open { display:grid; animation:toolbar-reveal .2s var(--ease); }
+  .toolbar-more button,.toolbar-more .guide-link { width:100%; }
+  #quoteTable .quote-field[data-field="underlyings"],
+  #quoteTable .quote-field[data-field="targetField"] { grid-column:1 / -1; }
+  #quoteTable .underlying-editor { padding:10px; border-radius:var(--r-control); background:#128a6a16; }
+  #quoteTable .underlying-editor > .field-label-text { display:block; margin-bottom:7px; }
+  #quoteTable .underlying-add,#quoteTable .underlying-remove { min-height:44px; }
+  #quoteTable .underlying-remove { width:44px; }
+}
+@keyframes toolbar-reveal { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:none; } }
 
 /* ---- Accessibility and motion, applied last so they win over the visual rules above. ---- */
 /* A visible focus ring on keyboard navigation only. Mouse users never see it, keyboard users
@@ -349,7 +433,7 @@ dialog button.primary { background:var(--accent); color:#fff; }
 
 /* Touch and reading sizes on phones ---------------------------------------------------------
    Measured at 375 px rather than assumed. Desktop density is deliberately left alone: a mouse
-   does not need a 44 px target, and the 21-column table is dense on purpose. */
+   does not need a 44 px target, and the desktop table is dense on purpose. */
 @media (max-width: 760px) {
   /* Five controls missed the 44 px minimum. The consent checkbox was the worst at 13x13 — a
      default checkbox that nothing had ever sized. */

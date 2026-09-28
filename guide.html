@@ -7,11 +7,11 @@
     <link rel="icon" href="./icon.svg?v=icon-v1" type="image/svg+xml" />
     <link rel="icon" href="./icon-32.png?v=icon-v1" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=icon-v1" />
-    <link rel="stylesheet" href="./styles.css?v=issuer-palette-v1" />
+    <link rel="stylesheet" href="./styles.css?v=form-restore-v1" />
     <link
       id="darkSheet"
       rel="stylesheet"
-      href="./styles-dark.css?v=dark-fifth-fix-v1"
+      href="./styles-dark.css?v=form-restore-v1"
       media="(prefers-color-scheme: dark)"
     />
     <script>
@@ -103,8 +103,9 @@
             <tr><td>Product</td><td>選擇 FCN 或 DAC；系統會依詢價對象自動換成該家接受的商品代碼。</td></tr>
             <tr><td>Currency</td><td>預設 USD；可選 JPY、EUR、HKD、CNH、CAD、GBP、AUD、NZD、ZAR。</td></tr>
             <tr><td>Guaranteed Periods (m)</td><td>預設 1；最小為 1，且不得大於 Tenor。</td></tr>
-            <tr><td>BBG Code 1–5</td><td>至少填一個，最多五個。輸入美股 ticker 後離開欄位，系統會依交易所檔案自動補上交易所代碼。</td></tr>
-            <tr><td>Strike (%)</td><td>可留白求值；若填寫，數值須介於 50 至 100。</td></tr>
+            <tr><td>連結標的</td><td>至少填一個；按「＋ 新增標的」可增加至五個。輸入美股 ticker 後離開欄位，系統會依交易所檔案自動補上交易所代碼。</td></tr>
+            <tr><td>求值欄位</td><td>明確選擇本次要求值的價格條件；系統會自動將該欄留白並鎖定。收到報價後若要填入該欄產出報價圖，請先把求值欄位改回「請選擇」即可解鎖。</td></tr>
+            <tr><td>Strike (%)</td><td>若不是求值欄位，數值須介於 50 至 100。</td></tr>
             <tr><td>KO Type</td><td>預設 Daily Memory；可選 Daily、Daily Memory、Period End、Period End Memory。Memory 表示含記憶功能。</td></tr>
             <tr><td>KO Barrier (%)、Coupon p.a. (%)</td><td>可留白求值。</td></tr>
             <tr><td>Upfront / NotePrice (%)</td><td>預設 98；可留白求值。</td></tr>
@@ -124,8 +125,9 @@
       <section class="guide-section">
         <h2>價格求值規則</h2>
         <ul>
-          <li>Barrier Type 為 EKI 或 AKI 時：Strike、KO Barrier、Coupon、Upfront / NotePrice、KI Barrier 五欄必須且只能留一欄空白。</li>
-          <li>Barrier Type 為 NONE 時：KI Barrier 必須空白；Strike、KO Barrier、Coupon、Upfront / NotePrice 四欄必須且只能留一欄空白。</li>
+          <li>Barrier Type 為 EKI 或 AKI 時，可從 Strike、KO Barrier、Coupon、Upfront / NotePrice、KI Barrier 選擇一個求值欄位。</li>
+          <li>Barrier Type 為 NONE 時，KI Barrier 會隱藏且不可選；可從 Strike、KO Barrier、Coupon、Upfront / NotePrice 選擇一個求值欄位。</li>
+          <li>選定後，求值欄位會自動留白並顯示「詢價中」；其他價格條件必須完整填寫。</li>
         </ul>
       </section>
     </main>
