@@ -1,6 +1,6 @@
 import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
 import { renderQuoteCards } from "./quote-card-canvas.mjs?v=canvas-v1";
-import { renderQuoteTable, tableModelFromDocument } from "./quote-table-canvas.mjs?v=review-fix-v1";
+import { renderQuoteTable, tableModelFromDocument } from "./quote-table-canvas.mjs?v=table-v2";
 
 const CARD_RENDER_STEP_TIMEOUT_MS = 12_000;
 const CARD_RENDER_TOTAL_TIMEOUT_MS = 24_000;
@@ -76,11 +76,12 @@ export function createImageController({
     showImages([{ blob, filename }]);
   }
 
-  function showImages(images) {
+  // `wide` marks landscape table images, which the desktop preview widens instead of fitting to height.
+  function showImages(images, { wide = false } = {}) {
     const entries = images.map(image => ({ ...image, url: URL.createObjectURL(image.blob) }));
     progressDialog.querySelector("[data-card-preview] [data-card-close]")?.click();
     const preview = document.createElement("section");
-    preview.className = "backend-card-preview";
+    preview.className = wide ? "backend-card-preview is-wide" : "backend-card-preview";
     preview.dataset.cardPreview = "";
     preview.setAttribute("role", "dialog");
     preview.setAttribute("aria-modal", "true");
@@ -272,7 +273,7 @@ export function createImageController({
         () => renderQuoteTable(tableModelFromDocument(sheet.html)), RENDER_STEPS.DRAW, deadlineAt,
         CARD_RENDER_TOTAL_TIMEOUT_MS);
       showImages(images.map(({ blob, page }) => ({ blob,
-        filename: images.length === 1 ? sheet.filename : sheet.filename.replace(/\.png$/i, `-${page}.png`) })));
+        filename: images.length === 1 ? sheet.filename : sheet.filename.replace(/\.png$/i, `-${page}.png`) })), { wide: true });
     } catch (error) {
       if (status) status.textContent = error instanceof Error ? error.message : "表格圖產出失敗，請稍後再試。";
     } finally {
