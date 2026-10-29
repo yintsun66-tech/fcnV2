@@ -230,6 +230,8 @@ dialog button.primary { background:var(--accent); color:#fff; }
 .underlying-list { display:grid; gap:7px; }
 .underlying-item { display:grid; grid-template-columns:22px minmax(0,1fr) 36px; align-items:center; gap:6px; }
 .underlying-item[hidden],.underlying-add[hidden],.underlying-remove[hidden] { display:none !important; }
+/* A field error is appended inside the item; on its own row across all three columns it reads left to right instead of one character per line in the 22px number column. */
+.underlying-item .field-error { grid-column:1 / -1; }
 .underlying-number { color:var(--label-2); font-size:var(--text-caption); font-weight:700; text-align:center; }
 #quoteTable .underlying-add,#quoteTable .underlying-remove {
   min-height:36px; border:0; border-radius:8px; background:#128a6a1c; color:#0e6e54;
