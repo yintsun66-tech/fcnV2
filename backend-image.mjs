@@ -1,6 +1,6 @@
 import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
 import { renderQuoteCards } from "./quote-card-canvas.mjs?v=canvas-v1";
-import { renderQuoteTable, tableModelFromDocument } from "./quote-table-canvas.mjs?v=table-v2";
+import { renderQuoteTable, tableModelFromDocument } from "./quote-table-canvas.mjs?v=table-v3";
 
 const CARD_RENDER_STEP_TIMEOUT_MS = 12_000;
 const CARD_RENDER_TOTAL_TIMEOUT_MS = 24_000;

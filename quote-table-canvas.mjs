@@ -125,7 +125,8 @@ export async function renderQuoteTable(model, { createCanvas = () => document.cr
         ctx.font = `${bold ? 700 : 400} ${fontSize}px ${FONT}`; ctx.fillStyle = color; ctx.fillText(value, x, y);
       };
       text(model.title, PAD, 52, "#2a6f78", true, TEXT.title);
-      layout.meta.forEach((line, i) => text(line, PAD, 92 + i * LINE.meta, "#55555c", false, TEXT.meta));
+      // The first meta line is the sheet's <strong>: the mail's RFQ code, bold as on the quote card.
+      layout.meta.forEach((line, i) => text(line, PAD, 92 + i * LINE.meta, i === 0 ? "#1c1c1e" : "#55555c", i === 0, TEXT.meta));
       let y = layout.top;
       const drawRow = (cells, height, header = false, rowIndex = 0) => {
         let x = PAD;

@@ -34,6 +34,18 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
   const adminLifecycleLoadMore = document.querySelector("#backendLifecycleLoadMore");
   const adminLifecycleFilters = document.querySelector("#backendLifecycleFilters");
   const adminLifecycleFiltersReset = document.querySelector("#backendLifecycleFiltersReset");
+  const rfqControlsDialog = document.querySelector("#backendRfqControls");
+  const rfqControlsError = document.querySelector("#backendRfqControlsError");
+  const rfqControlsStatus = document.querySelector("#backendRfqControlsStatus");
+  const rfqIntakeBox = document.querySelector("#backendRfqIntake");
+  const issuerControlsList = document.querySelector("#backendIssuerControls");
+  const blocklistDialog = document.querySelector("#backendBlocklist");
+  const blocklistError = document.querySelector("#backendBlocklistError");
+  const blocklistStatus = document.querySelector("#backendBlocklistStatus");
+  const blocklistForm = document.querySelector("#backendBlocklistForm");
+  const blocklistSymbol = document.querySelector("#backendBlocklistSymbol");
+  const blocklistReason = document.querySelector("#backendBlocklistReason");
+  const blocklistList = document.querySelector("#backendBlocklistList");
   let lifecycleProducts = [];
   let lifecycleTotal = 0;
   let lifecycleLoading = false;
@@ -567,6 +579,165 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
   }
 
 
+  // ----- RFQ controls (ADR 0060): pause switches and the underlying blocklist, ADMIN and PS -----
+
+  function changedBy(item, at) {
+    if (!at) return "—";
+    return `${item.updatedBy || item.createdBy ? `${escapeHtml(item.updatedBy || item.createdBy)}・` : ""}${escapeHtml(formatDateTime(at))}`;
+  }
+
+  function renderRfqControls(view) {
+    const intake = view.intake;
+    rfqIntakeBox.className = `backend-rfq-intake ${intake.enabled ? "is-on" : "is-off"}`;
+    rfqIntakeBox.innerHTML = `<div>
+        <strong>新詢價：${intake.enabled ? "開放中" : "已暫停"}</strong>
+        ${!intake.enabled && intake.note ? `<p>${escapeHtml(intake.note)}</p>` : ""}
+        <small>最後變更：${changedBy(intake, intake.updatedAt)}</small>
+      </div>
+      ${intake.enabled
+        ? '<button type="button" class="danger" data-intake-switch="off">關機（暫停新詢價）</button>'
+        : '<button type="button" class="primary" data-intake-switch="on">重啟（恢復新詢價）</button>'}`;
+    issuerControlsList.innerHTML = `<table><thead><tr><th>發行機構</th><th>狀態</th><th>暫停原因</th><th>最後變更</th><th>操作</th></tr></thead><tbody>${view.issuers.map(item => `<tr>
+        <td>${escapeHtml(item.issuer)}</td>
+        <td>${item.enabled ? "開放" : "<strong>暫停</strong>"}</td>
+        <td>${item.enabled || !item.note ? "—" : escapeHtml(item.note)}</td>
+        <td>${changedBy(item, item.updatedAt)}</td>
+        <td class="backend-registration-actions">${item.enabled
+          ? `<button type="button" class="secondary" data-issuer-switch="off" data-issuer="${escapeHtml(item.issuer)}">暫停</button>`
+          : `<button type="button" class="primary" data-issuer-switch="on" data-issuer="${escapeHtml(item.issuer)}">恢復</button>`}</td>
+      </tr>`).join("")}</tbody></table>`;
+  }
+
+  async function loadRfqControls(statusMessage = "") {
+    rfqControlsError.textContent = "";
+    rfqControlsStatus.textContent = statusMessage;
+    try {
+      renderRfqControls(await request("/rfq-controls"));
+    } catch (error) {
+      rfqControlsError.textContent = error.message;
+    }
+  }
+
+  async function openRfqControls() {
+    if (!isSupportRole()) return;
+    rfqIntakeBox.innerHTML = "<p class=\"backend-archive-empty\">正在載入…</p>";
+    issuerControlsList.innerHTML = "";
+    if (!rfqControlsDialog.open) rfqControlsDialog.showModal();
+    await loadRfqControls();
+  }
+
+  // A pause asks for a reason the requesters will see; turning back on asks nothing.
+  async function changeRfqControl(path, enabled, { reasonPrompt, done }) {
+    let note = null;
+    if (!enabled) {
+      note = window.prompt(`${reasonPrompt}（選填，會顯示給詢價者）：`, "");
+      if (note === null) return;
+    }
+    const buttons = [...rfqControlsDialog.querySelectorAll("button[data-intake-switch], button[data-issuer-switch]")];
+    buttons.forEach(item => { item.disabled = true; });
+    rfqControlsError.textContent = "";
+    rfqControlsStatus.textContent = "正在更新…";
+    try {
+      const view = await request(path, { method: "POST", body: JSON.stringify({ enabled, note }) });
+      renderRfqControls(view);
+      rfqControlsStatus.textContent = done;
+    } catch (error) {
+      rfqControlsError.textContent = error.message;
+      rfqControlsStatus.textContent = "";
+      buttons.forEach(item => { item.disabled = false; });
+    }
+  }
+
+  function renderBlocklist(view) {
+    const items = view.blockedUnderlyings || [];
+    blocklistList.innerHTML = items.length
+      ? `<table><thead><tr><th>代號</th><th>原因</th><th>加入</th><th>操作</th></tr></thead><tbody>${items.map(item => `<tr>
+          <td><strong>${escapeHtml(item.symbol)}</strong></td>
+          <td>${item.reason ? escapeHtml(item.reason) : "—"}</td>
+          <td>${changedBy(item, item.createdAt)}</td>
+          <td class="backend-registration-actions"><button type="button" class="secondary" data-unblock="${escapeHtml(item.symbol)}">移除</button></td>
+        </tr>`).join("")}</tbody></table>`
+      : "<p class=\"backend-archive-empty\">目前沒有不得連結的標的。</p>";
+  }
+
+  async function openBlocklist() {
+    if (!isSupportRole()) return;
+    blocklistError.textContent = "";
+    blocklistStatus.textContent = "";
+    blocklistList.innerHTML = "<p class=\"backend-archive-empty\">正在載入…</p>";
+    if (!blocklistDialog.open) blocklistDialog.showModal();
+    try {
+      renderBlocklist(await request("/rfq-controls"));
+    } catch (error) {
+      blocklistError.textContent = error.message;
+      blocklistList.innerHTML = "";
+    }
+  }
+
+  async function addBlockedUnderlying(event) {
+    event.preventDefault();
+    const symbol = blocklistSymbol.value.trim();
+    if (!symbol) { blocklistError.textContent = "請輸入代號。"; return; }
+    const submit = blocklistForm.querySelector("button[type=submit]");
+    submit.disabled = true;
+    blocklistError.textContent = "";
+    blocklistStatus.textContent = "";
+    try {
+      const view = await request("/admin/underlying-blocklist", {
+        method: "POST",
+        body: JSON.stringify({ symbol, reason: blocklistReason.value.trim() || null })
+      });
+      renderBlocklist(view);
+      blocklistForm.reset();
+      blocklistStatus.textContent = `已加入不得連結標的：${symbol.toUpperCase().split(/\s+/)[0]}。`;
+    } catch (error) {
+      blocklistError.textContent = error.message;
+    } finally {
+      submit.disabled = false;
+    }
+  }
+
+  async function removeBlockedUnderlying(symbol) {
+    if (!window.confirm(`確定把 ${symbol} 從不得連結標的移除？移除後新詢價可以再連結它。`)) return;
+    blocklistError.textContent = "";
+    blocklistStatus.textContent = "";
+    try {
+      renderBlocklist(await request(`/admin/underlying-blocklist/${encodeURIComponent(symbol)}/delete`, { method: "POST", body: "{}" }));
+      blocklistStatus.textContent = `已移除：${symbol}。`;
+    } catch (error) {
+      blocklistError.textContent = error.message;
+    }
+  }
+
+  document.querySelector("#closeBackendRfqControls").addEventListener("click", () => rfqControlsDialog.close());
+  rfqControlsDialog.addEventListener("click", event => {
+    const intake = event.target.closest("[data-intake-switch]");
+    if (intake) {
+      const enabled = intake.dataset.intakeSwitch === "on";
+      if (!enabled && !window.confirm("確定關機？關機後所有使用者都不能送出新詢價；已送出的詢價照常收信、比價與產圖。")) return;
+      void changeRfqControl("/admin/rfq-controls/intake", enabled, {
+        reasonPrompt: "關機原因",
+        done: enabled ? "已重啟，使用者可以送出新詢價。" : "已關機，新詢價暫停。"
+      });
+      return;
+    }
+    const issuer = event.target.closest("[data-issuer-switch][data-issuer]");
+    if (issuer) {
+      const enabled = issuer.dataset.issuerSwitch === "on";
+      const name = issuer.dataset.issuer;
+      void changeRfqControl(`/admin/rfq-controls/issuers/${encodeURIComponent(name)}`, enabled, {
+        reasonPrompt: `暫停 ${name} 的原因`,
+        done: enabled ? `已恢復 ${name}。` : `已暫停 ${name}，新詢價不會列入它。`
+      });
+    }
+  });
+  document.querySelector("#closeBackendBlocklist").addEventListener("click", () => blocklistDialog.close());
+  blocklistForm.addEventListener("submit", event => void addBlockedUnderlying(event));
+  blocklistList.addEventListener("click", event => {
+    const target = event.target.closest("[data-unblock]");
+    if (target) void removeBlockedUnderlying(target.dataset.unblock);
+  });
+
   document.querySelector("#closeBackendRegistrationReview").addEventListener("click", () => adminRegistrationReviewDialog.close());
   adminRegistrationReviewList.addEventListener("click", event => {
     const target = event.target.closest("[data-registration-action][data-registration-id]");
@@ -655,6 +826,8 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
     openOutboundArchive: openAdminOutboundArchive,
     openTimelines: openAdminRfqTimelines,
     openAccounts: openAdminAccounts,
-    openLifecycleProducts
+    openLifecycleProducts,
+    openRfqControls,
+    openBlocklist
   };
 }

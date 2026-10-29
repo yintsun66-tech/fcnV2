@@ -345,6 +345,21 @@ dialog button.primary { background:var(--accent); color:#fff; }
 
 /* Cards and panels: one elevation, one radius, no competing borders. */
 .backend-userbar { border: 0; border-radius: var(--r-card); background: #ffffffeb; backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); box-shadow: var(--shadow-2); color: var(--label); }
+/* Reported from the iPhone: after a sheet closed while the page scrolled, WebKit sometimes left its
+   blurred backdrop unpainted over the top of the screen and the user bar vanished. Touch screens get
+   a plain dim and opaque-enough bars instead of live blur; a mouse-driven desktop keeps the blur. */
+@media (hover: none) {
+  dialog::backdrop, .backend-dialog::backdrop { background: #0000006b; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .backend-userbar, .toolbar, .quote-count, .trade-navigator { backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+/* The bar's display:flex used to beat the hidden attribute, so hidden never hid it. It is now set only
+   while a forced password change is pending, and has to win there. */
+.backend-userbar[hidden] { display: none; }
+/* Signed out, the bar keeps one control, 登入, so a dismissed login sheet is never a dead end. It is
+   not .backend-mobile-collapsible: the collapsed bar must still show it. */
+.backend-userbar.is-signed-out > :not(#backendSignIn) { display: none !important; }
+.backend-userbar:not(.is-signed-out) > #backendSignIn { display: none; }
+#backendSignIn { min-height: var(--tap-min); }
 .ranking-card,
 .backend-timeline-card,
 .backend-rfq-card,
@@ -661,19 +676,21 @@ html { scroll-padding-top: calc(var(--sp-8) + env(safe-area-inset-top, 0px)); }
    the bottom edge with a grabber. Tablet and desktop keep the centred card,
    which is also the platform convention there. */
 @media (max-width: 760px) {
+  /* --keyboard-inset and --visual-height come from backend-client.js. The layout viewport keeps its
+     full height while the on-screen keyboard is up, so without them the sheet sat behind it. */
   dialog.backend-dialog {
     position: fixed;
-    inset: auto 0 0 0;
+    inset: auto 0 var(--keyboard-inset, 0px) 0;
     width: 100%;
     max-width: 100%;
-    max-height: 92dvh;
+    max-height: min(92dvh, calc(var(--visual-height, 100dvh) - 8px));
     margin: 0;
     border-radius: var(--r-sheet) var(--r-sheet) 0 0;
     animation: sheet-rise .32s var(--ease);
   }
   dialog.backend-dialog .backend-panel {
     min-width: 0;
-    max-height: 92dvh;
+    max-height: min(92dvh, calc(var(--visual-height, 100dvh) - 8px));
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: var(--sp-6) var(--sp-4);
@@ -693,6 +710,13 @@ html { scroll-padding-top: calc(var(--sp-8) + env(safe-area-inset-top, 0px)); }
     border-radius: var(--r-pill);
     background: var(--label-3);
   }
+  /* With the keyboard up, the space above it is too short for the sheet's decoration: the login
+     needed about 424 pt and had about 385 on a 402 x 874 iPhone. The keyboard covers the home
+     indicator, so the safe-area bottom padding goes too. */
+  .keyboard-open dialog.backend-dialog .backend-panel { padding-top: var(--sp-3); padding-bottom: var(--sp-3); }
+  .keyboard-open dialog.backend-dialog .backend-panel::before,
+  .keyboard-open dialog.backend-dialog .eyebrow { display: none; }
+  .keyboard-open dialog.backend-dialog h2 { margin: 0 0 var(--sp-2); }
   /* The quote-image preview needs no exception here. It is a <section role="dialog"> built in
      backend-image.mjs, not a <dialog class="backend-dialog">, so none of the rules above reach
      it and it keeps its own full-screen overlay. Do not "fix" these selectors to include it:
@@ -706,3 +730,12 @@ html { scroll-padding-top: calc(var(--sp-8) + env(safe-area-inset-top, 0px)); }
 @media (prefers-reduced-motion: reduce) {
   dialog.backend-dialog { animation: none; }
 }
+
+/* RFQ controls (ADR 0060): the intake switch in 詢價開關 and a paused issuer in the picker. */
+.backend-rfq-intake { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin:0 0 14px; padding:12px 14px; border:1px solid var(--separator-solid); border-radius:var(--r-card); background:var(--bg-elevated); }
+.backend-rfq-intake p { margin:4px 0 0; font-size:var(--text-subheadline); }
+.backend-rfq-intake small { display:block; margin-top:4px; color:var(--label-2); font-size:var(--text-footnote); }
+.backend-rfq-intake.is-off { border-color:var(--tint-red); }
+.backend-rfq-intake.is-off strong { color:var(--tint-red); }
+.backend-rfq-controls-heading { margin:8px 0 4px; font-size:var(--text-headline); }
+.issuer-pick-paused { display:block; margin-left:1.6em; color:var(--tint-red); font-size:var(--text-caption); }

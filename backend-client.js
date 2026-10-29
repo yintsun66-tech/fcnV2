@@ -41,12 +41,15 @@
   shell.className = "backend-shell";
   shell.innerHTML = `
     <div class="backend-userbar" hidden>
+      <button id="backendSignIn" type="button" class="primary">登入</button>
       <span id="backendUser" class="backend-mobile-collapsible"></span>
       <button id="backendChangePassword" type="button" class="secondary backend-mobile-collapsible">修改密碼</button>
       <button id="backendNewRfq" type="button" class="secondary backend-mobile-collapsible">新增詢價</button>
       <button id="backendMyRfqs" type="button" class="secondary">我的詢價 <span id="backendRfqBadge" class="backend-rfq-badge" hidden>0</span></button>
       <button id="backendAdminAccounts" type="button" class="secondary backend-mobile-collapsible" hidden>所有帳號列表</button>
       <button id="backendAdminRegistrations" type="button" class="secondary backend-mobile-collapsible" hidden>使用者申請審核</button>
+      <button id="backendAdminRfqControls" type="button" class="secondary backend-mobile-collapsible" hidden>詢價開關</button>
+      <button id="backendAdminBlocklist" type="button" class="secondary backend-mobile-collapsible" hidden>不得連結標的</button>
       <button id="backendAdminLifecycle" type="button" class="secondary backend-mobile-collapsible" hidden>商品資料一覽</button>
       <button id="backendAdminOutbound" type="button" class="secondary backend-mobile-collapsible" hidden>管理者寄件紀錄</button>
       <button id="backendAdminTimelines" type="button" class="secondary backend-mobile-collapsible" hidden>RFQ 處理時間軸</button>
@@ -138,6 +141,7 @@
           <button type="button" class="secondary" data-rfq-scope="all" aria-selected="false">全部</button>
         </div>
         <p id="backendRfqHistoryError" class="backend-error" role="alert"></p>
+        <p id="backendRfqHistoryStatus" class="backend-admin-status" role="status"></p>
         <div id="backendRfqHistoryList" class="backend-rfq-history-list" aria-live="polite"></div>
         <button id="backendRfqLoadMore" type="button" class="secondary backend-rfq-load-more" hidden>載入更多</button>
       </section>
@@ -178,6 +182,34 @@
           <span id="backendAccountLookupResult" class="backend-account-lookup-result" role="status"></span>
         </div>
         <div id="backendAccountsList" class="backend-accounts-list"></div>
+      </section>
+    </dialog>
+    <dialog id="backendRfqControls" class="backend-dialog backend-accounts-dialog">
+      <section class="backend-panel">
+        <div class="backend-results-heading"><div><p class="eyebrow">ADMINISTRATOR</p><h2>詢價開關</h2></div><button id="closeBackendRfqControls" type="button" class="secondary">關閉</button></div>
+        <p class="backend-archive-note">管理者與 PS 可暫停新詢價或個別發行機構。暫停只影響新詢價；已送出的詢價照常收信、比價與產圖。每次變更都會留下稽核紀錄。</p>
+        <p id="backendRfqControlsError" class="backend-error" role="alert"></p>
+        <p id="backendRfqControlsStatus" class="backend-admin-status" role="status"></p>
+        <div id="backendRfqIntake" class="backend-rfq-intake"></div>
+        <h3 class="backend-rfq-controls-heading">發行機構</h3>
+        <p class="backend-archive-note">BNP／MS／JPM／BARCLAYS 共用一封詢價信：只暫停其中一家時，該家不列入比價；但同組有別家被選時，信仍會寄到該組信箱。</p>
+        <div id="backendIssuerControls" class="backend-accounts-list"></div>
+      </section>
+    </dialog>
+    <dialog id="backendBlocklist" class="backend-dialog backend-accounts-dialog">
+      <section class="backend-panel">
+        <div class="backend-results-heading"><div><p class="eyebrow">ADMINISTRATOR</p><h2>不得連結標的</h2></div><button id="closeBackendBlocklist" type="button" class="secondary">關閉</button></div>
+        <p class="backend-archive-note">清單中的代號不能出現在新詢價的連結標的。同一代號在所有交易所都會擋，例如 TSLA 會擋 TSLA UW 與 TSLA US。已送出的詢價不受影響。</p>
+        <p id="backendBlocklistError" class="backend-error" role="alert"></p>
+        <p id="backendBlocklistStatus" class="backend-admin-status" role="status"></p>
+        <form id="backendBlocklistForm" class="backend-account-lookup">
+          <label for="backendBlocklistSymbol">代號</label>
+          <input id="backendBlocklistSymbol" maxlength="15" placeholder="例如 TSLA" autocomplete="off" autocapitalize="characters" required>
+          <label for="backendBlocklistReason">原因</label>
+          <input id="backendBlocklistReason" maxlength="100" placeholder="選填，會顯示給詢價者" autocomplete="off">
+          <button type="submit" class="primary">加入</button>
+        </form>
+        <div id="backendBlocklistList" class="backend-accounts-list"></div>
       </section>
     </dialog>
     <dialog id="backendRfqTimelines" class="backend-dialog backend-timeline-dialog">
@@ -270,6 +302,7 @@
   const rfqHistoryDialog = document.querySelector("#backendRfqHistory");
   const rfqHistoryList = document.querySelector("#backendRfqHistoryList");
   const rfqHistoryError = document.querySelector("#backendRfqHistoryError");
+  const rfqHistoryStatus = document.querySelector("#backendRfqHistoryStatus");
   const rfqLoadMoreButton = document.querySelector("#backendRfqLoadMore");
   const loginForm = document.querySelector("#backendLogin");
   const registrationForm = document.querySelector("#backendRegistration");
@@ -282,12 +315,17 @@
   const passwordChangeError = document.querySelector("#backendPasswordChangeError");
   const passwordChangeCancel = document.querySelector("#cancelBackendPasswordChange");
   const userbar = document.querySelector(".backend-userbar");
+  const signInButton = document.querySelector("#backendSignIn");
   const mobileActionsToggle = document.querySelector("#backendMobileActionsToggle");
   const mobileActionsLabel = document.querySelector("#backendMobileActionsLabel");
   const adminRegistrationsButton = document.querySelector("#backendAdminRegistrations");
   const adminRegistrationReviewDialog = document.querySelector("#backendRegistrationReview");
   const adminAccountsButton = document.querySelector("#backendAdminAccounts");
   const adminAccountsDialog = document.querySelector("#backendAccounts");
+  const adminRfqControlsButton = document.querySelector("#backendAdminRfqControls");
+  const adminRfqControlsDialog = document.querySelector("#backendRfqControls");
+  const adminBlocklistButton = document.querySelector("#backendAdminBlocklist");
+  const adminBlocklistDialog = document.querySelector("#backendBlocklist");
   const adminLifecycleButton = document.querySelector("#backendAdminLifecycle");
   const adminLifecycleDialog = document.querySelector("#backendLifecycleProducts");
   const adminOutboundButton = document.querySelector("#backendAdminOutbound");
@@ -357,6 +395,9 @@
       const error = new Error(payload?.error?.message || `伺服器錯誤（${response.status}）`);
       error.code = payload?.error?.code;
       error.fieldErrors = payload?.error?.fieldErrors;
+      // The server ends a session after 30 idle minutes. Without this the page kept showing the user
+      // while every request failed, and nothing offered a way back in.
+      if (response.status === 401 && error.code === "AUTHENTICATION_REQUIRED" && state.user) sessionExpired();
       throw error;
     }
     return payload;
@@ -364,7 +405,7 @@
 
   function loadImageController() {
     if (!imageControllerPromise) {
-      imageControllerPromise = import("./backend-image.mjs?v=image-fit-v1")
+      imageControllerPromise = import("./backend-image.mjs?v=rfq-controls-v1")
         .then(({ createImageController }) => createImageController({
           getRfqId: () => state.rfqId,
           request,
@@ -471,7 +512,7 @@
 
   function loadAdminController() {
     if (!adminControllerPromise) {
-      adminControllerPromise = import("./backend-admin.mjs?v=parser-preview-v1")
+      adminControllerPromise = import("./backend-admin.mjs?v=rfq-controls-v1")
         .then(({ createAdminController }) => createAdminController({
           request,
           getUser: () => state.user,
@@ -498,12 +539,32 @@
     if (!authDialog.open) authDialog.showModal();
   }
 
-  function closePrivateDialogs() {
-    closeRfqProgress();
+  // keepUrl leaves ?rfq= (and an analysis route) in place, so signing back in after an idle expiry
+  // reopens what was on screen.
+  function closePrivateDialogs({ keepUrl = false } = {}) {
+    closeRfqProgress({ updateUrl: !keepUrl });
     [rfqHistoryDialog, adminAccountsDialog, adminRegistrationReviewDialog, adminOutboundDialog,
-      adminTimelinesDialog, adminLifecycleDialog, issuerPickerDialog].forEach(dialog => {
+      adminTimelinesDialog, adminLifecycleDialog, adminRfqControlsDialog, adminBlocklistDialog,
+      issuerPickerDialog].forEach(dialog => {
       if (dialog?.open) dialog.close();
     });
+    document.body.classList.remove("backend-analysis-active");
+    analysisView.hidden = true;
+  }
+
+  // Signed out first, so nothing the closing dialogs start asks the server again. The entry form is
+  // left alone: the requester signs back in and carries on from the same screen.
+  function sessionExpired() {
+    const username = state.user?.username || "";
+    setUser(null);
+    closePrivateDialogs({ keepUrl: true });
+    if (passwordChangeDialog.open) passwordChangeDialog.close();
+    showAuthPanel("login");
+    loginForm.elements.username.value = username;
+    loginForm.elements.password.value = "";
+    document.querySelector("#backendAuthError").textContent = "閒置太久，已自動登出。請重新輸入密碼登入，畫面上的資料都會保留。";
+    showAuth();
+    loginForm.elements.password.focus();
   }
 
   function showAuthPanel(panel) {
@@ -553,10 +614,14 @@
   function setUser(user) {
     state.user = user;
     setMobileActionsExpanded(false);
-    userbar.hidden = !user || Boolean(user.passwordChangeRequired);
+    // Signed out, the bar stays on screen with only 登入: a dismissed login sheet was otherwise a dead end.
+    userbar.hidden = Boolean(user?.passwordChangeRequired);
+    userbar.classList.toggle("is-signed-out", !user);
     const isSupport = !!user && (user.role === "ADMIN" || user.role === "PS");
     adminAccountsButton.hidden = !isSupport;
     adminRegistrationsButton.hidden = !isSupport;
+    adminRfqControlsButton.hidden = !isSupport;
+    adminBlocklistButton.hidden = !isSupport;
     adminLifecycleButton.hidden = !user;
     adminOutboundButton.hidden = !user || user.role !== "ADMIN";
     adminTimelinesButton.hidden = !user || user.role !== "ADMIN";
@@ -732,6 +797,11 @@
       const requeue = isActive
         ? ""
         : ` <button type="button" class="secondary" data-requeue-rfq="${escapeHtml(rfq.id)}">再詢一次</button>`;
+      // Removing an RFQ only hides it from this list (ADR 0060); one still being processed cannot be.
+      const unsentDraft = ["DRAFT", "VALIDATED"].includes(rfq.workflowStatus) && rfq.dispatchStatus === "NOT_SENT";
+      const hide = isActive && !unsentDraft
+        ? ""
+        : ` <button type="button" class="secondary" data-hide-rfq="${escapeHtml(rfq.id)}">刪除</button>`;
       return `<article class="backend-rfq-card status-${escapeHtml(rfq.workflowStatus.toLowerCase())}">
         <header>
           <div><strong>${escapeHtml(rfq.id)}</strong><small>${escapeHtml(formatDateTime(rfq.createdAt))}</small></div>
@@ -746,13 +816,33 @@
         </div>
         ${rfq.hasUnrankedLateReplies ? '<p class="backend-rfq-late">有晚到報價，可開啟結果並執行版本化重新排名。</p>' : ""}
         ${expected ? `<div class="backend-rfq-progress"><span style="width:${percent}%"></span></div><small>已處理 ${terminal}/${expected} 家發行機構</small>` : ""}
-        <footer><span>${escapeHtml(rfqTimingText(rfq))}</span><span class="backend-rfq-actions">${requeue}<button type="button" class="primary" data-open-rfq="${escapeHtml(rfq.id)}">${action}</button></span></footer>
+        <footer><span>${escapeHtml(rfqTimingText(rfq))}</span><span class="backend-rfq-actions">${hide}${requeue}<button type="button" class="primary" data-open-rfq="${escapeHtml(rfq.id)}">${action}</button></span></footer>
       </article>`;
     }).join("");
   }
 
+  // 刪除 hides the RFQ from this list only; the RFQ and its records stay for audit (ADR 0060).
+  async function hideRfqFromList(button) {
+    const rfqId = button.dataset.hideRfq;
+    if (!window.confirm(`刪除後「${rfqId}」不再出現在你的詢價清單。詢價、報價與郵件紀錄仍依規定保留供稽核，管理者仍查得到。確定刪除？`)) return;
+    button.disabled = true;
+    rfqHistoryError.textContent = "";
+    rfqHistoryStatus.textContent = "";
+    try {
+      await request(`/rfqs/${encodeURIComponent(rfqId)}/hide`, { method: "POST", body: "{}" });
+      state.rfqListItems = state.rfqListItems.filter(rfq => rfq.id !== rfqId);
+      renderRfqHistory();
+      rfqHistoryStatus.textContent = `已從清單刪除 ${rfqId}。`;
+      void refreshRfqBadge();
+    } catch (error) {
+      rfqHistoryError.textContent = error.message;
+      button.disabled = false;
+    }
+  }
+
   async function loadRfqHistory({ append = false } = {}) {
     rfqHistoryError.textContent = "";
+    if (!append) rfqHistoryStatus.textContent = "";
     if (!append) {
       state.rfqListCursor = null;
       state.rfqListItems = [];
@@ -811,6 +901,51 @@
     await loadRfqHistory();
   }
 
+  // Reported from the iPhone: closing a sheet and starting a smooth scroll in the same task can leave
+  // WebKit's blurred backdrop unpainted over the top of the page, with the user bar gone. The scroll
+  // waits for the close to settle, and animates only with a mouse and without reduced motion.
+  function scrollIntoViewAfterSheetClose(selector) {
+    const smooth = matchMedia("(hover: hover) and (pointer: fine)").matches
+      && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    setTimeout(() => {
+      document.querySelector(selector)?.scrollIntoView({ block: "start", behavior: smooth ? "smooth" : "auto" });
+    }, 80);
+  }
+
+  function keyboardInset({ layoutHeight, viewportHeight, offsetTop }) {
+    return Math.max(0, Math.round(layoutHeight - viewportHeight - offsetTop));
+  }
+
+  // Also reported from the iPhone: iOS and Chrome on Android keep the layout viewport full height
+  // while the on-screen keyboard is up, so a sheet pinned to the bottom edge sat behind it and the
+  // login's 登入 could not be reached. The sheet rules in styles.css read these properties.
+  function trackKeyboard() {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const root = document.documentElement;
+    const update = () => {
+      const inset = keyboardInset({ layoutHeight: root.clientHeight, viewportHeight: viewport.height, offsetTop: viewport.offsetTop });
+      root.style.setProperty("--keyboard-inset", `${inset}px`);
+      root.style.setProperty("--visual-height", `${viewport.height}px`);
+      root.classList.toggle("keyboard-open", inset >= 120);
+    };
+    // The submit first, then the field: both show when they fit, and the field wins when they do not.
+    const revealFocusedField = () => {
+      const field = document.activeElement;
+      if (!field?.matches("input, select, textarea") || !field.closest("dialog[open]")) return;
+      field.form?.querySelector('[type="submit"]')?.scrollIntoView({ block: "nearest" });
+      field.scrollIntoView({ block: "nearest" });
+    };
+    viewport.addEventListener("resize", () => {
+      update();
+      revealFocusedField();
+    });
+    viewport.addEventListener("scroll", update);
+    // A timer rather than an animation frame: the keyboard is still opening when focusin fires.
+    document.addEventListener("focusin", () => setTimeout(revealFocusedField, 50));
+    update();
+  }
+
   // Refills the trade form from a finished request, and deliberately stops there. It never creates
   // or sends anything: a send puts real mail in front of issuer desks, so the requester reviews the
   // form and uses the normal send button, where validation and the issuer boundary still apply.
@@ -839,7 +974,7 @@
       notes.push("確認條件後請自行按「發送詢價條件」，系統不會自動送出。");
       statusElement.textContent = notes.join("");
       statusElement.classList.remove("success");
-      document.querySelector("#quoteTable")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      scrollIntoViewAfterSheetClose("#quoteTable");
     } catch (error) {
       statusElement.textContent = error instanceof Error ? error.message : "無法載入原詢價條件。";
       statusElement.classList.remove("success");
@@ -1317,6 +1452,9 @@
     const generatedAt = new Date();
     const datePart = `${generatedAt.getFullYear()}${String(generatedAt.getMonth() + 1).padStart(2, "0")}${String(generatedAt.getDate()).padStart(2, "0")}`;
     const reference = String(state.rfqId ?? "rfq");
+    // The mail subject's [RFQ:…] code, as the quote card prints it, so a table can be matched to its
+    // mail (ADR 0060). Results from before the field fall back to the internal id.
+    const heading = rfq.rfqCode ? `RFQ 編號：[RFQ:${rfq.rfqCode}]` : reference;
     const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8"><style>
 *{box-sizing:border-box}
 body{margin:0;padding:28px;width:max-content;min-width:820px;background:#ffffff;color:#1c1c1e;font-family:Arial,"Microsoft JhengHei",sans-serif}
@@ -1340,7 +1478,7 @@ body{margin:0;padding:28px;width:max-content;min-width:820px;background:#ffffff;
 </style></head><body>
 <header class="sheet-head">
 <div><p>FCN / DAC RANKING SUMMARY</p><h1>比價結果總表</h1></div>
-<div class="sheet-meta"><strong>${escapeHtml(reference)}</strong>${escapeHtml(generatedAt.toLocaleString("zh-TW", { hour12: false }))}<br>前 ${rankLimit} 名｜${trades.length} 筆交易</div>
+<div class="sheet-meta"><strong>${escapeHtml(heading)}</strong>${escapeHtml(generatedAt.toLocaleString("zh-TW", { hour12: false }))}<br>前 ${rankLimit} 名｜${trades.length} 筆交易</div>
 </header>
 ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
 <p class="sheet-foot">正式排名。本表僅供參考，最終條件以發行機構正式報價及相關文件為準。</p>
@@ -1515,10 +1653,69 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
     }
   }
 
-  function openIssuerPicker() {
+  // The server enforces the RFQ controls (ADR 0060). Reading them first only tells the requester
+  // before anything is created; if they cannot be read, the picker opens as it always did.
+  async function readRfqControls() {
+    try {
+      return await request("/rfq-controls", { timeoutMs: 8_000 });
+    } catch {
+      return null;
+    }
+  }
+
+  function blockedUnderlyingErrors(controls) {
+    const blocked = new Map((controls?.blockedUnderlyings || []).map(item => [item.symbol, item.reason]));
+    const errors = {};
+    if (!blocked.size) return errors;
+    collectTrades().forEach((trade, tradeIndex) => trade.underlyings.forEach((underlying, index) => {
+      const symbol = String(underlying).trim().toUpperCase().split(/\s+/)[0];
+      if (!blocked.has(symbol)) return;
+      const reason = blocked.get(symbol);
+      errors[`trades.${tradeIndex}.underlyings.${index}`] = `${symbol} 為不得連結標的${reason ? `：${reason}` : "。"}`;
+    }));
+    return errors;
+  }
+
+  function applyPausedIssuers(controls) {
+    const paused = new Map((controls.issuers || []).filter(item => !item.enabled).map(item => [item.issuer, item.note]));
+    issuerPickItems.forEach(item => {
+      const label = item.closest("label");
+      label?.querySelector(".issuer-pick-paused")?.remove();
+      const wasPaused = item.disabled;
+      item.disabled = paused.has(item.value);
+      label?.classList.toggle("is-disabled", item.disabled);
+      if (wasPaused && !item.disabled) item.checked = true;
+      if (!item.disabled) return;
+      item.checked = false;
+      const note = document.createElement("small");
+      note.className = "issuer-pick-paused";
+      note.textContent = paused.get(item.value) ? `暫停詢價：${paused.get(item.value)}` : "暫停詢價";
+      label?.append(note);
+    });
+    const enabledItems = issuerPickItems.filter(item => !item.disabled);
+    issuerPickAll.checked = enabledItems.length > 0 && enabledItems.every(item => item.checked);
+  }
+
+  async function openIssuerPicker() {
     if (!state.user) { showAuth(); return; }
     const kiIssue = kiBarrierIssue();
     if (kiIssue) { statusElement.textContent = kiIssue; statusElement.classList.remove("success"); return; }
+    const controls = await readRfqControls();
+    if (controls && controls.intake && !controls.intake.enabled) {
+      statusElement.textContent = `詢價系統暫停中，暫時不能送出新詢價${controls.intake.note ? `：${controls.intake.note}` : "。"}`;
+      statusElement.classList.remove("success");
+      return;
+    }
+    const blocked = blockedUnderlyingErrors(controls);
+    if (Object.keys(blocked).length) {
+      const symbols = [...new Set(Object.values(blocked).map(text => text.split(" ")[0]))];
+      const detail = { fieldErrors: blocked, message: `連結標的包含不得連結的標的：${symbols.join("、")}。` };
+      document.dispatchEvent(new CustomEvent("fcn:trade-field-errors", { detail }));
+      statusElement.textContent = detail.message;
+      statusElement.classList.remove("success");
+      return;
+    }
+    if (controls) applyPausedIssuers(controls);
     issuerPickerError.textContent = "";
     refreshFastIssuerPresetButton();
     updateIssuerPickerSummary();
@@ -1739,7 +1936,7 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
   newRfqButton.addEventListener("click", () => {
     if (rfqHistoryDialog.open) rfqHistoryDialog.close();
     closeRfqProgress();
-    document.querySelector(".entry-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollIntoViewAfterSheetClose(".entry-workspace");
   });
   myRfqsButton.addEventListener("click", openRfqHistory);
   document.querySelector("#backendBackToRfqs").addEventListener("click", openRfqHistory);
@@ -1756,17 +1953,25 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
   rfqHistoryList.addEventListener("click", event => {
     const requeueTarget = event.target.closest("[data-requeue-rfq]");
     if (requeueTarget) { void requeueRfq(requeueTarget); return; }
+    const hideTarget = event.target.closest("[data-hide-rfq]");
+    if (hideTarget) { void hideRfqFromList(hideTarget); return; }
     const target = event.target.closest("[data-open-rfq]");
     if (target) void openRfq(target.dataset.openRfq);
   });
   rfqLoadMoreButton.addEventListener("click", () => {
     if (state.rfqListCursor) void loadRfqHistory({ append: true });
   });
+  signInButton.addEventListener("click", () => {
+    showAuthPanel("login");
+    showAuth();
+  });
   document.querySelector("#backendLogout").addEventListener("click", async () => {
-    await request("/auth/logout", { method: "POST", body: "{}" });
+    try { await request("/auth/logout", { method: "POST", body: "{}" }); } catch { /* Session may already be expired. */ }
     closePrivateDialogs();
     setUser(null);
     showAuthPanel("login");
+    // An expired session shows the idle message on the way here; a deliberate 登出 should not.
+    document.querySelector("#backendAuthError").textContent = "";
     showAuth();
   });
   const resultsViewKey = "fcn-quote-app.results-view.v1";
@@ -1861,6 +2066,8 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
   adminOutboundButton.addEventListener("click", () => openAdminFeature("openOutboundArchive"));
   adminTimelinesButton.addEventListener("click", () => openAdminFeature("openTimelines"));
   adminAccountsButton.addEventListener("click", () => openAdminFeature("openAccounts"));
+  adminRfqControlsButton.addEventListener("click", () => openAdminFeature("openRfqControls"));
+  adminBlocklistButton.addEventListener("click", () => openAdminFeature("openBlocklist"));
   adminLifecycleButton.addEventListener("click", () => openAdminFeature("openLifecycleProducts"));
   addEventListener("popstate", () => {
     const analysis = currentAnalysisFromUrl();
@@ -1885,5 +2092,11 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
       if (state.rfqId) void refreshResults();
     }
   });
+  // A page restored from the back-forward cache fires no visibilitychange; ask once so an expired
+  // session shows up as the login sheet rather than as the next failed action.
+  addEventListener("pageshow", event => {
+    if (event.persisted && state.user) void refreshRfqBadge();
+  });
+  trackKeyboard();
   loadSession();
 })();
