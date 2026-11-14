@@ -1,3 +1,12 @@
+// What an operator typed as a price: digits with an optional decimal part, thousands separators
+// allowed. Anything else, zero or a negative number is refused rather than guessed at.
+export function parseManualEntryPrice(text) {
+  const cleaned = String(text).normalize("NFKC").trim().replaceAll(",", "");
+  if (!/^\d+(\.\d+)?$/u.test(cleaned)) return null;
+  const value = Number(cleaned);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
 export function createAdminController({ request, getUser, escapeHtml, formatDateTime }) {
   const adminRegistrationReviewDialog = document.querySelector("#backendRegistrationReview");
   const adminRegistrationReviewList = document.querySelector("#backendRegistrationReviewList");
@@ -86,7 +95,12 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
       const item = (product.underlyings || [])[index];
       if (!item?.underlying) return "<td>—</td><td>—</td>";
       const price = Number(item.initialEntryPrice);
-      return `<td>${escapeHtml(item.underlying)}</td><td>${item.initialEntryPrice == null || !Number.isFinite(price) ? "待補" : escapeHtml(price.toFixed(2))}</td>`;
+      const missing = item.initialEntryPrice == null || !Number.isFinite(price);
+      // ADMIN and PS can type a close no provider serves (ADR 0063); everyone else just sees 待補.
+      const pending = isSupportRole() && product.sourceStatus === "PENDING_ENTRY_PRICES"
+        ? `<button type="button" class="secondary" data-entry-price-underlying="${escapeHtml(item.underlying)}" data-entry-price-date="${escapeHtml(product.tradeDate)}">待補・輸入</button>`
+        : "待補";
+      return `<td>${escapeHtml(item.underlying)}</td><td>${missing ? pending : escapeHtml(price.toFixed(2))}</td>`;
     }).join("");
     adminLifecycleList.innerHTML = `<table class="backend-lifecycle-table"><thead><tr>
       <th>交易日</th><th>最後評價日</th><th>到期日</th><th>提前到期日</th><th>狀態</th><th>發行機構</th>
@@ -778,6 +792,35 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
   });
   document.querySelector("#closeBackendAccounts").addEventListener("click", () => adminAccountsDialog.close());
   document.querySelector("#closeBackendLifecycleProducts").addEventListener("click", () => adminLifecycleDialog.close());
+  // Manual entry price (ADR 0063): one value for an underlying on a trade date, applied to every
+  // product waiting for it.
+  adminLifecycleList.addEventListener("click", event => {
+    const button = event.target.closest("button[data-entry-price-underlying]");
+    if (!button) return;
+    const underlying = button.dataset.entryPriceUnderlying;
+    const displayDate = button.dataset.entryPriceDate;
+    const answer = window.prompt(
+      `輸入 ${underlying} 在 ${displayDate} 的收盤價（期初價）。\n會套用到所有等待這個標的、同一交易日的商品，輸入後不能修改。`
+    );
+    if (answer === null) return;
+    const price = parseManualEntryPrice(answer);
+    if (price === null) {
+      adminLifecycleError.textContent = "期初價必須是大於 0 的數字。";
+      return;
+    }
+    button.disabled = true;
+    adminLifecycleError.textContent = "";
+    void request("/admin/lifecycle/entry-prices", {
+      method: "POST",
+      body: JSON.stringify({ underlying, tradeDate: displayDate.replaceAll("/", "-"), price })
+    }).then(async result => {
+      await loadLifecycleProducts(true);
+      adminLifecycleNote.textContent = `已補上 ${result.marketSymbol} ${displayDate} 的期初價 ${result.price}，共 ${result.productsUpdated} 筆商品。`;
+    }).catch(error => {
+      button.disabled = false;
+      adminLifecycleError.textContent = error.message;
+    });
+  });
   adminLifecycleFilters.addEventListener("submit", event => {
     event.preventDefault();
     adminLifecycleError.textContent = "";
