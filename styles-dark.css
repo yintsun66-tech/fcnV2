@@ -124,6 +124,8 @@
 /* Queue/progress bars and any remaining accent fills carry dark text for the same reason. */
 .backend-rfq-progress span { background: linear-gradient(90deg, #3ab3c4, #4aa8d0); }
 .artifact-link, .backend-card-preview .artifact-link { background: var(--accent); color: #08262b; }
+/* The quote-image preview is a <dialog> too, but its background is the dimming overlay, not a surface. */
+dialog.backend-card-preview { background: rgba(3,34,49,.72) !important; }
 
 /* Correction to the earlier dark rules: filled controls used near-black text on a bright teal to
    satisfy AA. Separating the two roles is better — a deeper teal for FILLS keeps white text at

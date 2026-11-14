@@ -77,14 +77,18 @@ export function createImageController({
   }
 
   // `wide` marks landscape table images, which the desktop preview widens instead of fitting to height.
+  // The preview is its own modal <dialog> on <body>, above the results dialog in the top layer. It
+  // used to be a fixed overlay inside the results dialog, and iPad Safari clipped it to that
+  // dialog's box: the title, 關閉 and the table's first columns were cut off with no way back.
   function showImages(images, { wide = false } = {}) {
+    // A render that finishes after the results were closed (or the session expired) shows nothing,
+    // as before: a private quote image must not outlive the RFQ it came from.
+    if (!progressDialog.open) return;
     const entries = images.map(image => ({ ...image, url: URL.createObjectURL(image.blob) }));
-    progressDialog.querySelector("[data-card-preview] [data-card-close]")?.click();
-    const preview = document.createElement("section");
+    document.querySelector("dialog[data-card-preview]")?.close();
+    const preview = document.createElement("dialog");
     preview.className = wide ? "backend-card-preview is-wide" : "backend-card-preview";
     preview.dataset.cardPreview = "";
-    preview.setAttribute("role", "dialog");
-    preview.setAttribute("aria-modal", "true");
     preview.setAttribute("aria-label", "報價圖預覽");
     preview.innerHTML = `<section class="backend-panel">
       <div class="backend-results-heading"><div><p class="eyebrow">QUOTE IMAGE</p><h2>報價圖</h2></div><button type="button" class="secondary" data-card-close>關閉</button></div>
@@ -95,20 +99,27 @@ export function createImageController({
         <a class="artifact-link" href="${url}" download="${escapeHtml(filename)}">下載 PNG</a>
       </div>`).join("")}
     </section>`;
-    progressDialog.append(preview);
-    const onKeydown = event => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        close();
-      }
-    };
+    // Every way out ends in the preview's own close event: 關閉, Escape and the results dialog
+    // closing underneath it. Escape is taken before the browser sees it: a modal opened after an
+    // async render can share the results dialog's close request, and one press would close both.
+    const listeners = new AbortController();
     const close = () => {
-      document.removeEventListener("keydown", onKeydown, true);
+      if (preview.open) preview.close();
+    };
+    preview.addEventListener("close", () => {
+      listeners.abort();
       preview.remove();
       entries.forEach(({ url }) => URL.revokeObjectURL(url));
-    };
-    preview.querySelector("[data-card-close]").addEventListener("click", close);
-    document.addEventListener("keydown", onKeydown, true);
+    }, { signal: listeners.signal });
+    preview.querySelector("[data-card-close]").addEventListener("click", close, { signal: listeners.signal });
+    progressDialog.addEventListener("close", close, { signal: listeners.signal });
+    document.addEventListener("keydown", event => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      close();
+    }, { capture: true, signal: listeners.signal });
+    document.body.append(preview);
+    preview.showModal();
     preview.querySelector("[data-card-close]").focus();
   }
 

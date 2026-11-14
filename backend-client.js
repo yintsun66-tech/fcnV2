@@ -405,7 +405,7 @@
 
   function loadImageController() {
     if (!imageControllerPromise) {
-      imageControllerPromise = import("./backend-image.mjs?v=rfq-controls-v1")
+      imageControllerPromise = import("./backend-image.mjs?v=image-dialog-v1")
         .then(({ createImageController }) => createImageController({
           getRfqId: () => state.rfqId,
           request,
