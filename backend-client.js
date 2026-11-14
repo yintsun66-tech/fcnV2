@@ -36,6 +36,7 @@
   let imageControllerPromise = null;
   let analysisControllerPromise = null;
   let adminControllerPromise = null;
+  let opsControllerPromise = null;
 
   const shell = document.createElement("section");
   shell.className = "backend-shell";
@@ -50,6 +51,7 @@
       <button id="backendAdminRegistrations" type="button" class="secondary backend-mobile-collapsible" hidden>使用者申請審核</button>
       <button id="backendAdminRfqControls" type="button" class="secondary backend-mobile-collapsible" hidden>詢價開關</button>
       <button id="backendAdminBlocklist" type="button" class="secondary backend-mobile-collapsible" hidden>不得連結標的</button>
+      <button id="backendAdminOps" type="button" class="secondary backend-mobile-collapsible" hidden>系統狀態</button>
       <button id="backendAdminLifecycle" type="button" class="secondary backend-mobile-collapsible" hidden>商品資料一覽</button>
       <button id="backendAdminOutbound" type="button" class="secondary backend-mobile-collapsible" hidden>管理者寄件紀錄</button>
       <button id="backendAdminTimelines" type="button" class="secondary backend-mobile-collapsible" hidden>RFQ 處理時間軸</button>
@@ -196,6 +198,25 @@
         <div id="backendIssuerControls" class="backend-accounts-list"></div>
       </section>
     </dialog>
+    <dialog id="backendOps" class="backend-dialog backend-accounts-dialog">
+      <section class="backend-panel">
+        <div class="backend-results-heading"><div><p class="eyebrow">ADMINISTRATOR</p><h2>系統狀態</h2></div><button id="closeBackendOps" type="button" class="secondary">關閉</button></div>
+        <p class="backend-archive-note">系統每 30 分鐘自動檢查一次。同一個問題一天只通知一次；通知只寫項目與筆數，不含報價或個人資料。</p>
+        <p id="backendOpsError" class="backend-error" role="alert"></p>
+        <p id="backendOpsSummary" class="backend-admin-status" role="status"></p>
+        <div id="backendOpsChecks" class="backend-accounts-list"></div>
+        <h3 class="backend-rfq-controls-heading">這台裝置的告警通知</h3>
+        <p id="backendOpsPushStatus" class="backend-archive-note" role="status"></p>
+        <p id="backendOpsPushError" class="backend-error" role="alert"></p>
+        <div class="backend-registration-actions">
+          <button id="backendOpsPushToggle" type="button" class="primary" hidden>開啟通知</button>
+          <button id="backendOpsPushTest" type="button" class="secondary" hidden>送測試通知</button>
+          <button id="backendOpsRefresh" type="button" class="secondary">重新檢查</button>
+        </div>
+        <h3 class="backend-rfq-controls-heading">近兩週的告警</h3>
+        <div id="backendOpsAlerts" class="backend-accounts-list"></div>
+      </section>
+    </dialog>
     <dialog id="backendBlocklist" class="backend-dialog backend-accounts-dialog">
       <section class="backend-panel">
         <div class="backend-results-heading"><div><p class="eyebrow">ADMINISTRATOR</p><h2>不得連結標的</h2></div><button id="closeBackendBlocklist" type="button" class="secondary">關閉</button></div>
@@ -324,6 +345,8 @@
   const adminAccountsDialog = document.querySelector("#backendAccounts");
   const adminRfqControlsButton = document.querySelector("#backendAdminRfqControls");
   const adminRfqControlsDialog = document.querySelector("#backendRfqControls");
+  const adminOpsButton = document.querySelector("#backendAdminOps");
+  const adminOpsDialog = document.querySelector("#backendOps");
   const adminBlocklistButton = document.querySelector("#backendAdminBlocklist");
   const adminBlocklistDialog = document.querySelector("#backendBlocklist");
   const adminLifecycleButton = document.querySelector("#backendAdminLifecycle");
@@ -535,6 +558,23 @@
       });
   }
 
+  // 系統狀態 (ADR 0061) is its own lazy module, so the account-management module stays as it was.
+  function openOpsStatus() {
+    if (!opsControllerPromise) {
+      opsControllerPromise = import("./backend-ops.mjs?v=ops-status-v1")
+        .then(({ createOpsController }) => createOpsController({ request, escapeHtml, formatDateTime }))
+        .catch(error => {
+          opsControllerPromise = null;
+          throw error;
+        });
+    }
+    void opsControllerPromise
+      .then(controller => controller.openOpsStatus())
+      .catch(error => {
+        statusElement.textContent = error instanceof Error ? error.message : "無法載入系統狀態。";
+      });
+  }
+
   function showAuth() {
     if (!authDialog.open) authDialog.showModal();
   }
@@ -544,7 +584,7 @@
   function closePrivateDialogs({ keepUrl = false } = {}) {
     closeRfqProgress({ updateUrl: !keepUrl });
     [rfqHistoryDialog, adminAccountsDialog, adminRegistrationReviewDialog, adminOutboundDialog,
-      adminTimelinesDialog, adminLifecycleDialog, adminRfqControlsDialog, adminBlocklistDialog,
+      adminTimelinesDialog, adminLifecycleDialog, adminRfqControlsDialog, adminBlocklistDialog, adminOpsDialog,
       issuerPickerDialog].forEach(dialog => {
       if (dialog?.open) dialog.close();
     });
@@ -622,6 +662,7 @@
     adminRegistrationsButton.hidden = !isSupport;
     adminRfqControlsButton.hidden = !isSupport;
     adminBlocklistButton.hidden = !isSupport;
+    adminOpsButton.hidden = !isSupport;
     adminLifecycleButton.hidden = !user;
     adminOutboundButton.hidden = !user || user.role !== "ADMIN";
     adminTimelinesButton.hidden = !user || user.role !== "ADMIN";
@@ -2068,6 +2109,7 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
   adminAccountsButton.addEventListener("click", () => openAdminFeature("openAccounts"));
   adminRfqControlsButton.addEventListener("click", () => openAdminFeature("openRfqControls"));
   adminBlocklistButton.addEventListener("click", () => openAdminFeature("openBlocklist"));
+  adminOpsButton.addEventListener("click", openOpsStatus);
   adminLifecycleButton.addEventListener("click", () => openAdminFeature("openLifecycleProducts"));
   addEventListener("popstate", () => {
     const analysis = currentAnalysisFromUrl();
