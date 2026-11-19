@@ -7,6 +7,29 @@ export function parseManualEntryPrice(text) {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+// ADR 0069. What each manual-review code means to the operator, and what to do about it.
+const LIFECYCLE_REVIEW_REASONS = Object.freeze({
+  LIFECYCLE_SUBJECT_NOT_RECOGNIZED: ["主旨無法辨識", "主旨要有 deal 與商品代碼，代碼前後要有空格（例如 1005 deal-1 PCKX JPM）。修正後重新轉寄。"],
+  LIFECYCLE_ISSUER_TABLE_NOT_RECOGNIZED: ["信中沒有可辨識的發行機構表格", "可能是圖片、參考報價或欄位被改過。請轉寄含發行機構原始文字表格的成交信。"],
+  LIFECYCLE_QUOTE_COUNT_MISMATCH: ["表格筆數與主旨的商品代碼數不符", "一封信放一個商品；多個商品時，要在同一張表格裡且筆數相同。"],
+  LIFECYCLE_MULTIPLE_COMPLETE_QUOTES: ["表格裡有多筆完整報價", "只留下成交的那一筆後重新轉寄。"],
+  LIFECYCLE_ISSUER_TABLE_AMBIGUOUS: ["表格同時符合多家發行機構格式", "請洽系統管理者確認。"],
+  LIFECYCLE_TRADE_DATE_NOT_FOUND: ["找不到交易日", "表格沒有日期時，主旨要有 MMDD（例如 1005）。"],
+  LIFECYCLE_HTML_BODY_NOT_PRESENT: ["郵件沒有 HTML 內文", "請以 HTML 格式轉寄。"],
+  LIFECYCLE_TNEF_BODY_NOT_DECODABLE: ["Outlook 附件 winmail.dat 解不開", "請改以 HTML 格式轉寄。"],
+  LIFECYCLE_SENDER_NOT_AUTHORIZED: ["寄件者不在允許清單", "請由允許的信箱轉寄。"],
+  LIFECYCLE_EARLY_TERMINATION_PRODUCT_NOT_FOUND: ["提前到期通知的商品不在資料庫", "先匯入該商品的成交信，再重寄通知。"],
+  LIFECYCLE_EARLY_TERMINATION_PRODUCT_DUPLICATE: ["提前到期附件有重複的商品代碼", "刪除重複列後重寄。"],
+  LIFECYCLE_EARLY_TERMINATION_CSV_HEADERS_INVALID: ["提前到期 CSV 表頭不正確", "使用規定的兩個表頭後重寄。"],
+  LIFECYCLE_EARLY_TERMINATION_DATE_FORMAT_INVALID: ["提前到期日期格式不正確", "日期用 YYYYMMDD 後重寄。"],
+  LIFECYCLE_EARLY_TERMINATION_CSV_AMBIGUOUS: ["一封信有多個提前到期 CSV", "每封只附一個 CSV。"]
+});
+
+export function lifecycleReviewReason(errorCode) {
+  const known = LIFECYCLE_REVIEW_REASONS[errorCode];
+  return known ? { label: known[0], advice: known[1] } : { label: errorCode || "原因不明", advice: "請洽系統管理者。" };
+}
+
 export function createAdminController({ request, getUser, escapeHtml, formatDateTime }) {
   const adminRegistrationReviewDialog = document.querySelector("#backendRegistrationReview");
   const adminRegistrationReviewList = document.querySelector("#backendRegistrationReviewList");
@@ -77,12 +100,40 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
       ? `以新版解析器重試 ${reprocessable} 封`
       : "重新解析待檢查郵件";
     adminLifecycleHealth.innerHTML = `<article><strong>自動入庫狀態</strong>
-      <p>郵件：已入庫 ${messages.IMPORTED || 0}｜人工檢查 ${messages.MANUAL_REVIEW || 0}｜失敗 ${messages.FAILED || 0}</p>
+      <p>郵件：已入庫 ${messages.IMPORTED || 0}｜人工檢查 ${messages.MANUAL_REVIEW || 0}｜已結案 ${messages.DUPLICATE || 0}｜失敗 ${messages.FAILED || 0}</p>
       <p>商品：有效 ${products.ACTIVE || 0}｜待期初價 ${products.PENDING_ENTRY_PRICES || 0}</p>
       <p>期初價：完成 ${prices.AVAILABLE || 0}｜待查 ${prices.PENDING || 0}｜暫無資料 ${prices.UNAVAILABLE || 0}</p>
       ${parserErrors ? `<p>解析錯誤：${parserErrors}</p>` : ""}
       <small>收件地址 ${escapeHtml(health.inboundAddress)}｜更新 ${escapeHtml(formatDateTime(health.generatedAt))}</small>
-    </article>`;
+    </article>${renderManualReviews(health.manualReviews || [])}`;
+  }
+
+  function renderManualReviews(reviews) {
+    if (!reviews.length) return "";
+    const rows = reviews.map(review => {
+      const reason = lifecycleReviewReason(review.errorCode);
+      const products = (review.products || []).map(product => product.imported
+        ? `<span>${escapeHtml(product.productCode)}：已匯入（交易日 ${escapeHtml(product.tradeDate || "—")}）</span>`
+        : `<span>${escapeHtml(product.productCode)}：未匯入</span>`).join("<br>") || "—";
+      const allImported = (review.products || []).length > 0 && review.products.every(product => product.imported);
+      const retry = review.retryableByNewParser ? "<br><small>可用上方「以新版解析器重試」再試一次。</small>" : "";
+      return `<tr>
+        <td>${escapeHtml(formatDateTime(review.receivedAt))}</td>
+        <td>${escapeHtml(review.subject)}</td>
+        <td><strong>${escapeHtml(reason.label)}</strong><br><small>${escapeHtml(reason.advice)}</small>${retry}</td>
+        <td>${products}${allImported ? "<br><small>商品都已由其他郵件匯入，可以結案。</small>" : ""}</td>
+        <td><div class="backend-registration-actions">
+          <button type="button" class="secondary" data-review-id="${escapeHtml(review.id)}" data-review-resolution="SUPERSEDED">已另行匯入・結案</button>
+          <button type="button" class="secondary" data-review-id="${escapeHtml(review.id)}" data-review-resolution="NOT_NEEDED">不需處理・結案</button>
+        </div></td>
+      </tr>`;
+    }).join("");
+    return `<details class="backend-lifecycle-reviews" open>
+      <summary>人工檢查清單（${reviews.length} 封）</summary>
+      <div class="backend-accounts-list"><table><thead><tr>
+        <th>收信時間</th><th>主旨</th><th>原因與處理方式</th><th>商品現況</th><th>結案</th>
+      </tr></thead><tbody>${rows}</tbody></table></div>
+    </details>`;
   }
 
   function renderLifecycleProducts(products) {
@@ -836,6 +887,27 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
   });
   adminLifecycleLoadMore.addEventListener("click", () => {
     void loadLifecycleProducts().catch(error => { adminLifecycleError.textContent = error.message; });
+  });
+  adminLifecycleHealth.addEventListener("click", async event => {
+    const button = event.target.closest("button[data-review-id]");
+    if (!button) return;
+    const notNeeded = button.dataset.reviewResolution === "NOT_NEEDED";
+    const question = notNeeded
+      ? "確定這封郵件不需處理並結案？郵件與紀錄都會保留，只是不再列在人工檢查。"
+      : "確定這封郵件的商品已由其他郵件匯入並結案？郵件與紀錄都會保留，只是不再列在人工檢查。";
+    if (!window.confirm(question)) return;
+    button.disabled = true;
+    adminLifecycleError.textContent = "";
+    try {
+      await request(`/admin/lifecycle/reviews/${encodeURIComponent(button.dataset.reviewId)}/resolve`, {
+        method: "POST",
+        body: JSON.stringify({ resolution: button.dataset.reviewResolution })
+      });
+      renderLifecycleHealth(await request("/admin/lifecycle/health"));
+    } catch (error) {
+      adminLifecycleError.textContent = error.message;
+      button.disabled = false;
+    }
   });
   adminLifecycleReprocess.addEventListener("click", async () => {
     adminLifecycleReprocess.disabled = true;

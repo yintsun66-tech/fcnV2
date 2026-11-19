@@ -535,7 +535,7 @@
 
   function loadAdminController() {
     if (!adminControllerPromise) {
-      adminControllerPromise = import("./backend-admin.mjs?v=entry-price-v1")
+      adminControllerPromise = import("./backend-admin.mjs?v=lifecycle-review-v1")
         .then(({ createAdminController }) => createAdminController({
           request,
           getUser: () => state.user,
