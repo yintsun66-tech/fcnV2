@@ -256,7 +256,7 @@
         </div>
         <p id="backendLifecycleNote" class="backend-archive-note">成交郵件完全解析後才自動入庫；期初進場價依交易日收盤價補入。所有已登入使用者均可查看。</p>
         <form id="backendLifecycleFilters" class="backend-lifecycle-filters">
-          <label>商品代號<input id="backendLifecycleProductCode" name="productCode" maxlength="12" autocomplete="off" placeholder="例如 PBQW" /></label>
+          <label>商品代號<input id="backendLifecycleProductCode" name="productCode" maxlength="12" autocomplete="off" placeholder="例如 PXXX" /></label>
           <label>交易日起<input id="backendLifecycleTradeDateFrom" name="tradeDateFrom" type="date" /></label>
           <label>交易日迄<input id="backendLifecycleTradeDateTo" name="tradeDateTo" type="date" /></label>
           <label>發行機構<select id="backendLifecycleIssuer" name="issuer">
@@ -535,7 +535,7 @@
 
   function loadAdminController() {
     if (!adminControllerPromise) {
-      adminControllerPromise = import("./backend-admin.mjs?v=lifecycle-review-v1")
+      adminControllerPromise = import("./backend-admin.mjs?v=lifecycle-review-v2")
         .then(({ createAdminController }) => createAdminController({
           request,
           getUser: () => state.user,

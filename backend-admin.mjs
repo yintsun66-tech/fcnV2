@@ -9,7 +9,7 @@ export function parseManualEntryPrice(text) {
 
 // ADR 0069. What each manual-review code means to the operator, and what to do about it.
 const LIFECYCLE_REVIEW_REASONS = Object.freeze({
-  LIFECYCLE_SUBJECT_NOT_RECOGNIZED: ["主旨無法辨識", "主旨要有 deal 與商品代碼，代碼前後要有空格（例如 1005 deal-1 PCKX JPM）。修正後重新轉寄。"],
+  LIFECYCLE_SUBJECT_NOT_RECOGNIZED: ["主旨無法辨識", "主旨要有 deal 與商品代碼，代碼前後要有空格（例如 1005 deal-1 PXXX JPM）。修正後重新轉寄。"],
   LIFECYCLE_ISSUER_TABLE_NOT_RECOGNIZED: ["信中沒有可辨識的發行機構表格", "可能是圖片、參考報價或欄位被改過。請轉寄含發行機構原始文字表格的成交信。"],
   LIFECYCLE_QUOTE_COUNT_MISMATCH: ["表格筆數與主旨的商品代碼數不符", "一封信放一個商品；多個商品時，要在同一張表格裡且筆數相同。"],
   LIFECYCLE_MULTIPLE_COMPLETE_QUOTES: ["表格裡有多筆完整報價", "只留下成交的那一筆後重新轉寄。"],
