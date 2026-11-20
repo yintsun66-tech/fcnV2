@@ -538,7 +538,7 @@
 
   function loadAdminController() {
     if (!adminControllerPromise) {
-      adminControllerPromise = import("./backend-admin.mjs?v=lifecycle-csv-import-v1")
+      adminControllerPromise = import("./backend-admin.mjs?v=lifecycle-csv-suffix-v1")
         .then(({ createAdminController }) => createAdminController({
           request,
           getUser: () => state.user,

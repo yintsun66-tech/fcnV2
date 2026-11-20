@@ -327,6 +327,12 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
           <td>${item.changes.map(change => `${escapeHtml(change.field)}：${escapeHtml(change.from || "（空白）")} → ${escapeHtml(change.to || "（空白）")}`).join("<br>")}</td>
         </tr>`).join("")}</tbody></table></div>`
       : "";
+    const completions = (preview.symbolCompletions || []).length
+      ? `<h3>自動補上交易所代碼 ${preview.symbolCompletions.length} 筆（請確認）</h3><div class="backend-accounts-list"><table><thead><tr><th>列</th><th>商品代號</th><th>欄位</th><th>原值 → 補上後</th></tr></thead><tbody>${preview.symbolCompletions.map(item => `<tr>
+          <td>${escapeHtml(item.row)}</td><td><strong>${escapeHtml(item.productCode)}</strong></td>
+          <td>${escapeHtml(item.field)}</td><td>${escapeHtml(item.from)} → <strong>${escapeHtml(item.to)}</strong>${(item.alternatives || []).length ? `<br><small>對照表另有 ${escapeHtml(item.alternatives.join("、"))}，若不是這個交易所請在 CSV 寫完整代號</small>` : ""}</td>
+        </tr>`).join("")}</tbody></table></div>`
+      : "";
     const applicable = !(preview.errors || []).length && ((preview.created || []).length + (preview.corrected || []).length) > 0;
     adminLifecycleImportPreview.innerHTML = `<article>
         <strong>CSV 預覽：${escapeHtml(pendingLifecycleImport?.fileName || "")}</strong>
@@ -336,7 +342,7 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
           <button type="button" class="primary" data-lifecycle-import="apply" ${applicable ? "" : "disabled"}>套用</button>
           <button type="button" class="secondary" data-lifecycle-import="cancel">取消</button>
         </div>
-      </article>${errors}${created}${corrected}`;
+      </article>${errors}${completions}${created}${corrected}`;
     adminLifecycleImportPreview.hidden = false;
   }
 
