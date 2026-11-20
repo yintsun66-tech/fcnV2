@@ -7,6 +7,19 @@ export function parseManualEntryPrice(text) {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+const LIFECYCLE_DATE_LABELS = Object.freeze({ finalValuationDate: "最後評價日", maturityDate: "到期日" });
+
+// ADR 0072. Accepts 2027/01/22, 2027-01-22, 2027.1.22 or 20270122 and returns an existing
+// calendar date as YYYY-MM-DD, or null.
+export function parseManualDate(text) {
+  const cleaned = String(text).normalize("NFKC").trim();
+  const match = /^(\d{4})[/.-]?(\d{1,2})[/.-]?(\d{1,2})$/u.exec(cleaned);
+  if (!match || (!/[/.-]/u.test(cleaned) && cleaned.length !== 8)) return null;
+  const iso = `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+  const parsed = new Date(`${iso}T00:00:00Z`);
+  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === iso ? iso : null;
+}
+
 // ADR 0069. What each manual-review code means to the operator, and what to do about it.
 const LIFECYCLE_REVIEW_REASONS = Object.freeze({
   LIFECYCLE_SUBJECT_NOT_RECOGNIZED: ["主旨無法辨識", "主旨要有 deal 與商品代碼，代碼前後要有空格（例如 1005 deal-1 PXXX JPM）。修正後重新轉寄。"],
@@ -28,6 +41,27 @@ const LIFECYCLE_REVIEW_REASONS = Object.freeze({
 export function lifecycleReviewReason(errorCode) {
   const known = LIFECYCLE_REVIEW_REASONS[errorCode];
   return known ? { label: known[0], advice: known[1] } : { label: errorCode || "原因不明", advice: "請洽系統管理者。" };
+}
+
+// ADR 0071: an early-termination notice now marks the products it can and lists only the missing
+// codes, so its review reads differently from a notice that was rejected whole.
+export function lifecycleReviewText(review) {
+  if (!review?.earlyTermination) return lifecycleReviewReason(review?.errorCode);
+  const missing = (review.products || []).length;
+  return {
+    label: `提前到期通知有 ${missing} 個代號不在資料庫`,
+    advice: `其餘 ${review.earlyTermination.appliedCount} 筆已標記提前到期。下列代號請先寄成交信匯入，再寄只含這些代號的 CSV；確定不需要就結案。`
+  };
+}
+
+export function lifecycleReviewProductLine(review, product) {
+  const date = product.earlyTerminationDate ? `（提前到期 ${product.earlyTerminationDate}）` : "";
+  if (review?.earlyTermination) {
+    return `${product.productCode}${date}：${product.imported ? "成交信已匯入，請重寄 CSV" : "不在資料庫"}`;
+  }
+  return product.imported
+    ? `${product.productCode}：已匯入（交易日 ${product.tradeDate || "—"}）`
+    : `${product.productCode}：未匯入`;
 }
 
 export function createAdminController({ request, getUser, escapeHtml, formatDateTime }) {
@@ -111,11 +145,11 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
   function renderManualReviews(reviews) {
     if (!reviews.length) return "";
     const rows = reviews.map(review => {
-      const reason = lifecycleReviewReason(review.errorCode);
-      const products = (review.products || []).map(product => product.imported
-        ? `<span>${escapeHtml(product.productCode)}：已匯入（交易日 ${escapeHtml(product.tradeDate || "—")}）</span>`
-        : `<span>${escapeHtml(product.productCode)}：未匯入</span>`).join("<br>") || "—";
-      const allImported = (review.products || []).length > 0 && review.products.every(product => product.imported);
+      const reason = lifecycleReviewText(review);
+      const products = (review.products || [])
+        .map(product => `<span>${escapeHtml(lifecycleReviewProductLine(review, product))}</span>`).join("<br>") || "—";
+      const allImported = !review.earlyTermination
+        && (review.products || []).length > 0 && review.products.every(product => product.imported);
       const retry = review.retryableByNewParser ? "<br><small>可用上方「以新版解析器重試」再試一次。</small>" : "";
       return `<tr>
         <td>${escapeHtml(formatDateTime(review.receivedAt))}</td>
@@ -153,6 +187,13 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
         : "待補";
       return `<td>${escapeHtml(item.underlying)}</td><td>${missing ? pending : escapeHtml(price.toFixed(2))}</td>`;
     }).join("");
+    // ADR 0072: some issuers' tables carry no final valuation or maturity date; ADMIN and PS can
+    // fill an empty one. A parsed date is shown as it is and cannot be changed here.
+    const dateCell = (product, field) => {
+      if (product[field]) return escapeHtml(product[field]);
+      if (!isSupportRole()) return "—";
+      return `<button type="button" class="secondary" data-lifecycle-date-field="${escapeHtml(field)}" data-lifecycle-date-product="${escapeHtml(product.productCode)}" data-lifecycle-date-trade="${escapeHtml(product.tradeDate)}">待補・輸入</button>`;
+    };
     adminLifecycleList.innerHTML = `<table class="backend-lifecycle-table"><thead><tr>
       <th>交易日</th><th>最後評價日</th><th>到期日</th><th>提前到期日</th><th>狀態</th><th>發行機構</th>
       <th>商品代號</th><th>Product</th><th>Currency</th><th>Guaranteed Periods (m)</th>
@@ -163,7 +204,7 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
       <th>Barrier Type</th><th>KI Barrier (%)</th><th>Observation Frequency</th>
     </tr></thead><tbody>${products.map(product => `<tr class="${product.status === "expire" ? `backend-lifecycle-expired backend-lifecycle-expired-${product.expirationReason === "EARLY_TERMINATION" ? "early" : "maturity"}` : ""}">
       <td>${escapeHtml(product.tradeDate)}</td>
-      <td>${escapeHtml(product.finalValuationDate || "—")}</td><td>${escapeHtml(product.maturityDate || "—")}</td>
+      <td>${dateCell(product, "finalValuationDate")}</td><td>${dateCell(product, "maturityDate")}</td>
       <td>${escapeHtml(product.earlyTerminationDate || "—")}</td>
       <td><span class="backend-lifecycle-status backend-lifecycle-status-${product.status === "expire" ? "expire" : "current"}">${escapeHtml(product.status)}</span></td>
       <td><strong>${escapeHtml(product.issuerDisplayName || product.issuer)}</strong></td>
@@ -867,6 +908,36 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
     }).then(async result => {
       await loadLifecycleProducts(true);
       adminLifecycleNote.textContent = `已補上 ${result.marketSymbol} ${displayDate} 的期初價 ${result.price}，共 ${result.productsUpdated} 筆商品。`;
+    }).catch(error => {
+      button.disabled = false;
+      adminLifecycleError.textContent = error.message;
+    });
+  });
+  // Manual final valuation / maturity date (ADR 0072): fills one empty date of one product.
+  adminLifecycleList.addEventListener("click", event => {
+    const button = event.target.closest("button[data-lifecycle-date-field]");
+    if (!button) return;
+    const field = button.dataset.lifecycleDateField;
+    const productCode = button.dataset.lifecycleDateProduct;
+    const label = LIFECYCLE_DATE_LABELS[field];
+    if (!label) return;
+    const answer = window.prompt(
+      `輸入 ${productCode} 的${label}（例如 2027/01/22 或 20270122）。\n交易日是 ${button.dataset.lifecycleDateTrade}；輸入後不能修改。`
+    );
+    if (answer === null) return;
+    const date = parseManualDate(answer);
+    if (date === null) {
+      adminLifecycleError.textContent = `${label}格式不正確，請用 YYYY/MM/DD 或 YYYYMMDD。`;
+      return;
+    }
+    button.disabled = true;
+    adminLifecycleError.textContent = "";
+    void request(`/admin/lifecycle/products/${encodeURIComponent(productCode)}/dates`, {
+      method: "POST",
+      body: JSON.stringify({ [field]: date })
+    }).then(async () => {
+      await loadLifecycleProducts(true);
+      adminLifecycleNote.textContent = `已補上 ${productCode} 的${label} ${date.replaceAll("-", "/")}。`;
     }).catch(error => {
       button.disabled = false;
       adminLifecycleError.textContent = error.message;

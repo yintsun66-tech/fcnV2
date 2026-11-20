@@ -266,7 +266,7 @@
           </select></label>
           <label>商品類型<select id="backendLifecycleProductType" name="productType"><option value="">全部</option><option>FCN</option><option>DAC</option></select></label>
           <label>幣別<select id="backendLifecycleCurrency" name="currency"><option value="">全部</option><option>USD</option><option>JPY</option><option>EUR</option><option>HKD</option><option>CNH</option><option>CAD</option><option>GBP</option><option>AUD</option><option>ZAR</option></select></label>
-          <label>狀態<select id="backendLifecycleStatusFilter" name="status"><option value="">全部</option><option value="CURRENT">未到期</option><option value="EXPIRE">expire</option></select></label>
+          <label>狀態<select id="backendLifecycleStatusFilter" name="status"><option value="">全部</option><option value="CURRENT">未到期</option><option value="EXPIRE">expire</option><option value="PENDING">等待輸入</option></select></label>
           <div class="backend-lifecycle-filter-actions"><button type="submit">搜尋／篩選</button><button id="backendLifecycleFiltersReset" type="reset" class="secondary">清除</button></div>
         </form>
         <p id="backendLifecycleError" class="backend-error" role="alert"></p>
@@ -535,7 +535,7 @@
 
   function loadAdminController() {
     if (!adminControllerPromise) {
-      adminControllerPromise = import("./backend-admin.mjs?v=lifecycle-review-v2")
+      adminControllerPromise = import("./backend-admin.mjs?v=lifecycle-dates-v1")
         .then(({ createAdminController }) => createAdminController({
           request,
           getUser: () => state.user,
