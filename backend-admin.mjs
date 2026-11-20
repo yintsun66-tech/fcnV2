@@ -8,6 +8,25 @@ export function parseManualEntryPrice(text) {
 }
 
 const LIFECYCLE_DATE_LABELS = Object.freeze({ finalValuationDate: "最後評價日", maturityDate: "到期日" });
+const MAX_LIFECYCLE_IMPORT_BYTES = 2 * 1024 * 1024;
+
+// ADR 0073. The upload travels as base64 inside JSON; chunks keep String.fromCharCode's argument
+// list short enough for every browser.
+export function bytesToBase64(bytes) {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
+export function lifecycleImportSummary(preview) {
+  const errors = (preview.errors || []).length;
+  const counts = `共 ${preview.rows} 列：新增 ${(preview.created || []).length}、更正 ${(preview.corrected || []).length}、沒有變動 ${preview.unchanged}`;
+  if (errors) return `${counts}；有 ${errors} 個錯誤，修正前不能套用。`;
+  if (!(preview.created || []).length && !(preview.corrected || []).length) return `${counts}；沒有需要寫入的內容。`;
+  return `${counts}。確認無誤後按「套用」。`;
+}
 
 // ADR 0072. Accepts 2027/01/22, 2027-01-22, 2027.1.22 or 20270122 and returns an existing
 // calendar date as YYYY-MM-DD, or null.
@@ -96,6 +115,12 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
   const adminLifecycleError = document.querySelector("#backendLifecycleError");
   const adminLifecycleExport = document.querySelector("#backendLifecycleExport");
   const adminLifecycleReprocess = document.querySelector("#backendLifecycleReprocess");
+  const adminLifecycleImport = document.querySelector("#backendLifecycleImport");
+  const adminLifecycleImportFile = document.querySelector("#backendLifecycleImportFile");
+  const adminLifecycleImportPreview = document.querySelector("#backendLifecycleImportPreview");
+  // ADR 0073: the uploaded file is kept until it is applied or cancelled, because apply sends the
+  // same bytes again with the plan hash the preview returned.
+  let pendingLifecycleImport = null;
   const adminLifecycleNote = document.querySelector("#backendLifecycleNote");
   const adminLifecycleLoadMore = document.querySelector("#backendLifecycleLoadMore");
   const adminLifecycleFilters = document.querySelector("#backendLifecycleFilters");
@@ -255,9 +280,11 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
     adminLifecycleHealth.innerHTML = "";
     adminLifecycleHealth.hidden = !support;
     adminLifecycleExport.hidden = !support;
+    adminLifecycleImport.hidden = !support;
+    clearLifecycleImport();
     adminLifecycleReprocess.hidden = true;
     adminLifecycleNote.textContent = support
-      ? "所有已登入使用者均可查看；ADMIN／PS 可另外查看入庫健康狀態並下載 44 欄 CSV。"
+      ? "所有已登入使用者均可查看；ADMIN／PS 可另外查看入庫健康狀態、下載 44 欄 CSV，並上傳 CSV 新增或更正商品。"
       : "此一覽以成交商品資料庫為準，期初進場價依交易日收盤價補入。";
     adminLifecycleList.innerHTML = "<p class=\"backend-archive-empty\">正在載入成交商品…</p>";
     adminLifecycleLoadMore.hidden = true;
@@ -270,6 +297,47 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
       adminLifecycleHealth.innerHTML = "";
       adminLifecycleList.innerHTML = "";
     }
+  }
+
+  function clearLifecycleImport() {
+    pendingLifecycleImport = null;
+    adminLifecycleImportPreview.innerHTML = "";
+    adminLifecycleImportPreview.hidden = true;
+    adminLifecycleImportFile.value = "";
+  }
+
+  function renderLifecycleImportPreview(preview) {
+    const summary = lifecycleImportSummary(preview);
+    const errors = (preview.errors || []).length
+      ? `<h3>錯誤（需修正後重新上傳）</h3><div class="backend-accounts-list"><table><thead><tr><th>列</th><th>商品代號</th><th>欄位</th><th>原因</th></tr></thead><tbody>${preview.errors.map(error => `<tr>
+          <td>${escapeHtml(error.row)}</td><td>${escapeHtml(error.productCode || "—")}</td>
+          <td>${escapeHtml(error.field || "—")}</td><td>${escapeHtml(error.message)}</td>
+        </tr>`).join("")}</tbody></table></div>`
+      : "";
+    const created = (preview.created || []).length
+      ? `<h3>新增 ${preview.created.length} 筆</h3><div class="backend-accounts-list"><table><thead><tr><th>列</th><th>商品代號</th><th>發行機構</th><th>交易日</th><th>狀態</th></tr></thead><tbody>${preview.created.map(item => `<tr>
+          <td>${escapeHtml(item.row)}</td><td><strong>${escapeHtml(item.productCode)}</strong></td>
+          <td>${escapeHtml(item.issuer)}</td><td>${escapeHtml(item.tradeDate)}</td><td>${escapeHtml(item.status)}</td>
+        </tr>`).join("")}</tbody></table></div>`
+      : "";
+    const corrected = (preview.corrected || []).length
+      ? `<h3>更正 ${preview.corrected.length} 筆</h3><div class="backend-accounts-list"><table><thead><tr><th>列</th><th>商品代號</th><th>變更（原值 → 新值）</th></tr></thead><tbody>${preview.corrected.map(item => `<tr>
+          <td>${escapeHtml(item.row)}</td>
+          <td><strong>${escapeHtml(item.productCode)}</strong>${item.previouslyCorrected ? "<br><small>曾以 CSV 更正</small>" : ""}</td>
+          <td>${item.changes.map(change => `${escapeHtml(change.field)}：${escapeHtml(change.from || "（空白）")} → ${escapeHtml(change.to || "（空白）")}`).join("<br>")}</td>
+        </tr>`).join("")}</tbody></table></div>`
+      : "";
+    const applicable = !(preview.errors || []).length && ((preview.created || []).length + (preview.corrected || []).length) > 0;
+    adminLifecycleImportPreview.innerHTML = `<article>
+        <strong>CSV 預覽：${escapeHtml(pendingLifecycleImport?.fileName || "")}</strong>
+        <p>${escapeHtml(summary)}</p>
+        <p><small>尚未寫入。空白格代表不修改，填「-」代表清空。之後若再匯入同一商品的成交信，會整筆覆蓋這次的更正。</small></p>
+        <div class="backend-registration-actions">
+          <button type="button" class="primary" data-lifecycle-import="apply" ${applicable ? "" : "disabled"}>套用</button>
+          <button type="button" class="secondary" data-lifecycle-import="cancel">取消</button>
+        </div>
+      </article>${errors}${created}${corrected}`;
+    adminLifecycleImportPreview.hidden = false;
   }
 
   function renderAdminOutboundList(records) {
@@ -912,6 +980,56 @@ export function createAdminController({ request, getUser, escapeHtml, formatDate
       button.disabled = false;
       adminLifecycleError.textContent = error.message;
     });
+  });
+  // CSV upload (ADR 0073): choose a file, preview what it would add or correct, then apply.
+  adminLifecycleImport.addEventListener("click", () => adminLifecycleImportFile.click());
+  adminLifecycleImportFile.addEventListener("change", () => {
+    const file = adminLifecycleImportFile.files?.[0];
+    if (!file) return;
+    adminLifecycleError.textContent = "";
+    if (file.size < 1 || file.size > MAX_LIFECYCLE_IMPORT_BYTES) {
+      adminLifecycleError.textContent = "CSV 檔案大小必須介於 1 byte 與 2 MiB。";
+      adminLifecycleImportFile.value = "";
+      return;
+    }
+    adminLifecycleImport.disabled = true;
+    adminLifecycleImportPreview.hidden = false;
+    adminLifecycleImportPreview.innerHTML = "<p class=\"backend-archive-empty\">正在檢查 CSV…</p>";
+    void file.arrayBuffer().then(async buffer => {
+      const upload = { fileName: file.name, contentBase64: bytesToBase64(new Uint8Array(buffer)) };
+      const preview = await request("/admin/lifecycle/csv-import/preview", { method: "POST", body: JSON.stringify(upload) });
+      pendingLifecycleImport = { ...upload, planHash: preview.planHash };
+      renderLifecycleImportPreview(preview);
+    }).catch(error => {
+      clearLifecycleImport();
+      adminLifecycleError.textContent = error.message;
+    }).finally(() => {
+      adminLifecycleImport.disabled = false;
+      adminLifecycleImportFile.value = "";
+    });
+  });
+  adminLifecycleImportPreview.addEventListener("click", event => {
+    const button = event.target.closest("button[data-lifecycle-import]");
+    if (!button) return;
+    if (button.dataset.lifecycleImport === "cancel") {
+      clearLifecycleImport();
+      return;
+    }
+    if (!pendingLifecycleImport) return;
+    if (!window.confirm("確定要依這份預覽新增與更正商品嗎？套用後會寫入商品資料庫並留下稽核紀錄。")) return;
+    button.disabled = true;
+    adminLifecycleError.textContent = "";
+    void request("/admin/lifecycle/csv-import/apply", { method: "POST", body: JSON.stringify(pendingLifecycleImport) })
+      .then(async result => {
+        clearLifecycleImport();
+        await loadLifecycleProducts(true);
+        if (isSupportRole()) renderLifecycleHealth(await request("/admin/lifecycle/health"));
+        adminLifecycleNote.textContent = `CSV 已套用：新增 ${result.created} 筆、更正 ${result.corrected} 筆、沒有變動 ${result.unchanged} 筆。`;
+      })
+      .catch(error => {
+        button.disabled = false;
+        adminLifecycleError.textContent = error.message;
+      });
   });
   // Manual final valuation / maturity date (ADR 0072): fills one empty date of one product.
   adminLifecycleList.addEventListener("click", event => {

@@ -251,6 +251,8 @@
           <div class="dialog-actions">
             <button id="backendLifecycleReprocess" type="button" class="secondary" hidden>重新解析待檢查郵件</button>
             <a id="backendLifecycleExport" class="guide-link" href="/api/v1/admin/lifecycle/export.csv" hidden>下載 44 欄 CSV</a>
+            <button id="backendLifecycleImport" type="button" class="secondary" hidden>上傳 CSV 新增／更正</button>
+            <input id="backendLifecycleImportFile" type="file" accept=".csv,text/csv" hidden />
             <button id="closeBackendLifecycleProducts" type="button" class="secondary">關閉</button>
           </div>
         </div>
@@ -271,6 +273,7 @@
         </form>
         <p id="backendLifecycleError" class="backend-error" role="alert"></p>
         <div id="backendLifecycleHealth" class="backend-rfq-health" hidden></div>
+        <div id="backendLifecycleImportPreview" class="backend-rfq-health" aria-live="polite" hidden></div>
         <div id="backendLifecycleList" class="backend-accounts-list" aria-live="polite"></div>
         <button id="backendLifecycleLoadMore" type="button" class="secondary backend-rfq-load-more" hidden>載入更多商品</button>
       </section>
@@ -535,7 +538,7 @@
 
   function loadAdminController() {
     if (!adminControllerPromise) {
-      adminControllerPromise = import("./backend-admin.mjs?v=lifecycle-dates-v1")
+      adminControllerPromise = import("./backend-admin.mjs?v=lifecycle-csv-import-v1")
         .then(({ createAdminController }) => createAdminController({
           request,
           getUser: () => state.user,
