@@ -8,7 +8,7 @@
     <link rel="icon" href="./icon.svg?v=icon-v1" type="image/svg+xml" />
     <link rel="icon" href="./icon-32.png?v=icon-v1" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=icon-v1" />
-    <link rel="stylesheet" href="./styles.css?v=image-dialog-v1" />
+    <link rel="stylesheet" href="./styles.css?v=table-tools-v1" />
     <link
       id="darkSheet"
       rel="stylesheet"
@@ -49,6 +49,7 @@
         <div>
           <h1>FCN / DAC 詢價條件</h1>
           <p>以分區條件卡完成每筆交易，填寫、確認與發送都在同一頁完成。</p>
+          <nav id="backupSites" class="backup-sites" aria-label="備援網址" hidden></nav>
         </div>
         <div class="quote-count" aria-live="polite"><strong id="quoteCount">1</strong> / 20 筆</div>
       </header>
@@ -153,20 +154,20 @@
             <thead>
               <tr>
                 <th scope="col">#</th>
-                <th scope="col">Product *</th>
-                <th scope="col">Currency *</th>
-                <th scope="col">Trade Date *</th>
-                <th scope="col">Tenor (m) *</th>
+                <th scope="col" data-column="product"><span class="th-zh">產品別</span>Product *</th>
+                <th scope="col" data-column="currency"><span class="th-zh">貨幣別</span>Currency *</th>
+                <th scope="col" data-column="tradeDate"><span class="th-zh">交易日</span>Trade Date *</th>
+                <th scope="col" data-column="tenor"><span class="th-zh">天期（月）</span>Tenor (m) *</th>
                 <th scope="col">連結標的 *</th>
-                <th scope="col">求值欄位 *</th>
-                <th scope="col">Strike (%)</th>
-                <th scope="col">KO Type *</th>
-                <th scope="col">KO Barrier (%)</th>
-                <th scope="col">Coupon p.a. (%)</th>
-                <th scope="col">Upfront /<br>NotePrice (%)</th>
-                <th scope="col">Guaranteed<br>Periods (m) *</th>
-                <th scope="col">Barrier Type *</th>
-                <th scope="col">KI Barrier (%)</th>
+                <th scope="col" data-column="targetField">求值欄位 *</th>
+                <th scope="col" data-column="strike"><span class="th-zh">轉換價%</span>Strike (%)</th>
+                <th scope="col" data-column="koType"><span class="th-zh">提前出場類別</span>KO Type *</th>
+                <th scope="col" data-column="koBarrier"><span class="th-zh">提前出場價%</span>KO Barrier (%)</th>
+                <th scope="col" data-column="coupon"><span class="th-zh">年化配息率</span>Coupon p.a. (%)</th>
+                <th scope="col" data-column="upfront"><span class="th-zh">百元報價(手收)</span>Upfront /<br>NotePrice (%)</th>
+                <th scope="col" data-column="guaranteedPeriods"><span class="th-zh">保證配息期數</span>Guaranteed<br>Periods (m) *</th>
+                <th scope="col" data-column="barrierType"><span class="th-zh">觸及生效類別</span>Barrier Type *</th>
+                <th scope="col" data-column="kiBarrier"><span class="th-zh">觸及生效價%</span>KI Barrier (%)</th>
                 <th scope="col">Observation<br>Frequency (m)</th>
                 <th scope="col">OTC</th>
                 <th scope="col">Effective Date Offset<br>(Calendar Days)</th>
@@ -297,11 +298,11 @@
     </dialog>
 
     <script type="module" src="./market-holidays.mjs?v=market-holidays-v1"></script>
-    <script type="module" src="./app.js?v=form-restore-v1"></script>
+    <script type="module" src="./app.js?v=table-tools-v1"></script>
     <script type="module" src="./earnings-advisory.mjs?v=undo-resume-v1"></script>
     <script type="module">
       if (location.hostname === "app.yintsun66.com" || new URLSearchParams(location.search).get("backend") === "1") {
-        import("./backend-client.js?v=lifecycle-csv-suffix-v1");
+        import("./backend-client.js?v=table-tools-v1");
       }
     </script>
     <script>

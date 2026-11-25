@@ -80,6 +80,7 @@
         <button class="primary" type="submit">登入</button>
         <button id="showPasswordReset" class="link-button" type="button">忘記密碼</button>
         <button id="showRegistration" class="link-button" type="button">申請新帳號</button>
+        <p id="backendBackupSites" class="backend-backup-sites" hidden></p>
       </form>
       <form id="backendRegistration" class="backend-panel" hidden>
         <p class="eyebrow">APPROVAL REQUIRED</p><h2>申請使用權限</h2>
@@ -115,7 +116,7 @@
     </dialog>
     <dialog id="backendProgress" class="backend-dialog backend-results-dialog">
       <section class="backend-panel">
-        <div class="backend-results-heading"><div><p class="eyebrow">AUTOMATED RFQ</p><h2>詢價進度與比價結果</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap"><div id="backendResultsView" class="backend-results-view" role="group" aria-label="比價結果顯示方式"><button type="button" data-results-view="cards" aria-pressed="true">卡片</button><button type="button" data-results-view="table" aria-pressed="false">表格</button></div><button id="backendFinalizeNow" type="button" class="secondary" hidden>提早結束並比價</button><button id="backendRecalculate" type="button" class="secondary" hidden>納入晚到報價重新排名</button><button id="backendBackToRfqs" type="button" class="secondary">我的詢價</button><button id="closeBackendProgress" type="button" class="secondary">返回輸入</button></div></div>
+        <div class="backend-results-heading"><div><p class="eyebrow">AUTOMATED RFQ</p><h2>詢價進度與比價結果</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap"><div id="backendResultsView" class="backend-results-view" role="group" aria-label="比價結果顯示方式"><button type="button" data-results-view="cards" aria-pressed="true">卡片</button><button type="button" data-results-view="table" aria-pressed="false">表格</button></div><button id="backendFinalizeNow" type="button" class="secondary" hidden>提早結束並比價</button><button id="backendRecalculate" type="button" class="secondary" hidden>納入晚到報價重新排名</button><button id="backendRequeueFromResults" type="button" class="secondary" hidden>再詢一次</button><button id="backendBackToRfqs" type="button" class="secondary">我的詢價</button><button id="closeBackendProgress" type="button" class="secondary">返回輸入</button></div></div>
         <section id="backendFinalizeConfirm" class="backend-finalize-confirm" role="alertdialog" aria-labelledby="backendFinalizeConfirmTitle" hidden>
           <strong id="backendFinalizeConfirmTitle">確認提前結束詢價</strong>
           <p id="backendFinalizeConfirmMessage"></p>
@@ -310,6 +311,7 @@
   const finalizeCancelButton = document.querySelector("#backendFinalizeCancel");
   const finalizeConfirmAction = document.querySelector("#backendFinalizeConfirmAction");
   const recalculateButton = document.querySelector("#backendRecalculate");
+  const requeueResultsButton = document.querySelector("#backendRequeueFromResults");
   const issuerPickerDialog = document.querySelector("#backendIssuerPicker");
   const issuerPickerForm = document.querySelector("#backendIssuerPickerForm");
   const issuerPickAll = document.querySelector("#issuerPickAll");
@@ -1011,6 +1013,7 @@
         : [];
       if (issuers.length) setIssuerSelection(issuers);
       if (rfqHistoryDialog.open) rfqHistoryDialog.close();
+      if (progressDialog.open) closeRfqProgress();
       const notes = [`已載入 ${detail.loaded} 筆原條件，Trade Date 已改為今天。`];
       if (issuers.length) notes.push(`已勾選原本的 ${issuers.length} 家發行機構。`);
       if (detail.skipped > 0) notes.push(`原詢價另有 ${detail.skipped} 筆超過 ${20} 筆上限，未載入。`);
@@ -1249,6 +1252,9 @@
     if (finalizeButton.hidden) hideFinalizeConfirmation();
     recalculateButton.hidden = !["COMPLETED", "NO_VALID_QUOTE"].includes(payload.rfq.workflowStatus)
       || !payload.rfq.hasUnrankedLateReplies;
+    // 再詢一次 only refills the entry form from this request's terms, so it is safe at any stage.
+    requeueResultsButton.dataset.requeueRfq = payload.rfq.id;
+    requeueResultsButton.hidden = !/^rfq_[A-Za-z0-9-]+$/u.test(String(payload.rfq.id ?? ""));
     updateProvisionalBanner();
   }
 
@@ -1348,18 +1354,18 @@
     return TARGET_FIELD_TERM[targetField] === key;
   }
 
-  function termText(terms, key, targetField, suffix = "") {
-    if (isTargetTerm(key, targetField)) return "詢價中";
+  function termText(terms, key, targetField, suffix = "", targetText = "詢價中") {
+    if (isTargetTerm(key, targetField)) return targetText;
     const value = terms?.[key];
     if (value === null || value === undefined || value === "") return "—";
     return `${value}${suffix}`;
   }
 
-  function termCellHtml(terms, key, targetField, suffix = "") {
+  function termCellHtml(terms, key, targetField, suffix = "", targetText = "詢價中") {
     const target = isTargetTerm(key, targetField);
     const upfront = key === "upfrontOrNotePricePct";
     const classes = [target ? "term-target" : "", upfront ? "term-upfront" : ""].filter(Boolean).join(" ");
-    return `<td${classes ? ` class="${classes}"` : ""}>${escapeHtml(termText(terms, key, targetField, suffix))}</td>`;
+    return `<td${classes ? ` class="${classes}"` : ""}>${escapeHtml(termText(terms, key, targetField, suffix, targetText))}</td>`;
   }
 
   // Shown while the issuers are still replying: the requester should be able to read back what was
@@ -1412,14 +1418,14 @@
       label: `BBG ${index + 1}`,
       cell: (trade, terms, underlyings) => `<td>${escapeHtml(underlyings[index] ?? "—")}</td>`
     })),
-    { label: "Strike (%)", cell: (trade, terms) => termCellHtml(terms, "strikePct", trade.targetField, "%") },
+    { label: "Strike (%)", cell: (trade, terms, underlyings, targetText) => termCellHtml(terms, "strikePct", trade.targetField, "%", targetText) },
     { label: "KO Type", cell: (trade, terms) => `<td>${escapeHtml(terms.koType ?? "—")}</td>` },
-    { label: "KO Barrier (%)", cell: (trade, terms) => termCellHtml(terms, "koBarrierPct", trade.targetField, "%") },
-    { label: "Coupon p.a. (%)", cell: (trade, terms) => termCellHtml(terms, "couponPaPct", trade.targetField, "%") },
-    { label: "Upfront / NotePrice (%)", cell: (trade, terms) => termCellHtml(terms, "upfrontOrNotePricePct", trade.targetField, "%") },
+    { label: "KO Barrier (%)", cell: (trade, terms, underlyings, targetText) => termCellHtml(terms, "koBarrierPct", trade.targetField, "%", targetText) },
+    { label: "Coupon p.a. (%)", cell: (trade, terms, underlyings, targetText) => termCellHtml(terms, "couponPaPct", trade.targetField, "%", targetText) },
+    { label: "Upfront / NotePrice (%)", cell: (trade, terms, underlyings, targetText) => termCellHtml(terms, "upfrontOrNotePricePct", trade.targetField, "%", targetText) },
     { label: "Guaranteed Periods (m)", cell: (trade, terms) => `<td>${escapeHtml(terms.guaranteedPeriodsMonths == null ? "—" : String(terms.guaranteedPeriodsMonths))}</td>` },
     { label: "Barrier Type", cell: (trade, terms) => `<td>${escapeHtml(terms.barrierType ?? "—")}</td>` },
-    { label: "KI Barrier (%)", cell: (trade, terms) => termCellHtml(terms, "kiBarrierPct", trade.targetField, "%") },
+    { label: "KI Barrier (%)", cell: (trade, terms, underlyings, targetText) => termCellHtml(terms, "kiBarrierPct", trade.targetField, "%", targetText) },
     { label: "Observation Frequency (m)", cell: (trade, terms) => `<td>${escapeHtml(terms.observationFrequencyMonths == null ? "—" : String(terms.observationFrequencyMonths))}</td>` },
     { label: "OTC", cell: (trade, terms) => `<td>${escapeHtml(terms.otc ?? "—")}</td>` },
     { label: "Effective Date Offset", cell: (trade, terms) => `<td>${escapeHtml(terms.effectiveDateOffsetCalendarDays == null ? "—" : String(terms.effectiveDateOffsetCalendarDays))}</td>` }
@@ -1436,7 +1442,9 @@
     "Effective Date Offset"
   ]);
 
-  function resultsTableMarkup(payload, rankLimit, omitted) {
+  // targetText fills the priced term's cell: 詢價中 on screen; the exported image points the reader
+  // to the rank columns on its left instead.
+  function resultsTableMarkup(payload, rankLimit, omitted, targetText = "詢價中") {
     // Ranks lead. The trade code still comes first because it is the row's subject -- pushing it
     // right would leave the leading columns with nothing to belong to -- but everything the reader
     // opened this view for now sits inside the first screen, with the terms trailing behind it.
@@ -1453,7 +1461,7 @@
       return `<tr>
         <th scope="row">${escapeHtml(trade.tradeCode)}</th>
         ${ranks.map(rank => rankCellHtml(trade, rank)).join("")}
-        ${columns.map(column => column.cell(trade, terms, underlyings)).join("")}
+        ${columns.map(column => column.cell(trade, terms, underlyings, targetText)).join("")}
       </tr>`;
     }).join("");
     return `<table class="ranking-table"><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table>`;
@@ -1524,7 +1532,7 @@ body{margin:0;padding:28px;width:max-content;min-width:820px;background:#ffffff;
 <div><p>FCN / DAC RANKING SUMMARY</p><h1>比價結果總表</h1></div>
 <div class="sheet-meta"><strong>${escapeHtml(heading)}</strong>${escapeHtml(generatedAt.toLocaleString("zh-TW", { hour12: false }))}<br>前 ${rankLimit} 名｜${trades.length} 筆交易</div>
 </header>
-${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
+${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS, "排名請見左邊欄位")}
 <p class="sheet-foot">正式排名。本表僅供參考，最終條件以發行機構正式報價及相關文件為準。</p>
 </body></html>`;
     return {
@@ -2090,6 +2098,7 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
       finalizeConfirmAction.disabled = false;
     }
   });
+  requeueResultsButton.addEventListener("click", () => { void requeueRfq(requeueResultsButton); });
   recalculateButton.addEventListener("click", async () => {
     if (!state.rfqId) return;
     if (!window.confirm("確定要把已保存的晚到報價納入新的排名版本嗎？原本的正式結果會保留。")) return;
@@ -2142,6 +2151,42 @@ ${resultsTableMarkup({ trades }, rankLimit, SHEET_OMITTED_COLUMNS)}
   addEventListener("pageshow", event => {
     if (event.persisted && state.user) void refreshRfqBadge();
   });
+  // Backup sites. app.js already links the static copy; the third site comes from the Worker, never
+  // from this file, because the public static snapshot carries this file too. The login sheet gets
+  // the same links, since it covers the page until someone signs in.
+  async function showBackupSites() {
+    let links = [];
+    try {
+      const response = await fetch(`${api}/site-links`, { credentials: "same-origin" });
+      const payload = response.ok ? await response.json() : null;
+      links = (Array.isArray(payload?.links) ? payload.links : [])
+        .filter(link => typeof link?.label === "string" && /^https:\/\/[^\s"'<>]+$/u.test(String(link?.url)));
+    } catch { /* The links are a convenience; quoting must not depend on them. */ }
+    const makeLink = (url, label) => {
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.target = "_blank";
+      anchor.rel = "noopener";
+      anchor.textContent = label;
+      return anchor;
+    };
+    const pageNav = document.querySelector("#backupSites");
+    if (pageNav) {
+      links.forEach(link => pageNav.append(makeLink(link.url, link.label)));
+      pageNav.hidden = !pageNav.querySelector("a");
+    }
+    const loginNote = document.querySelector("#backendBackupSites");
+    if (loginNote) {
+      const all = [...(pageNav?.querySelectorAll("a") ?? [])].map(anchor => [anchor.href, anchor.textContent]);
+      if (!all.length) return;
+      const lead = document.createElement("span");
+      lead.textContent = "備援網址：";
+      loginNote.replaceChildren(lead, ...all.map(([url, label]) => makeLink(url, label)));
+      loginNote.hidden = false;
+    }
+  }
+
+  void showBackupSites();
   trackKeyboard();
   loadSession();
 })();

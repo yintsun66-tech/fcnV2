@@ -20,6 +20,13 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
   "use strict";
 
   const MAX_ROWS = 20;
+  // A requested Upfront / NotePrice must lie in this band (the Worker enforces the same range).
+  const UPFRONT_MIN = 97;
+  const UPFRONT_MAX = 99;
+  // The three sites back each other up. The public static copy only ever names the dynamic site;
+  // the dynamic site adds the third one at run time from the Worker (backend-client.js).
+  const DYNAMIC_SITE_URL = "https://app.yintsun66.com/";
+  const STATIC_SITE_URL = "https://yintsun66-tech.github.io/fcnV2/";
   const DRAFT_STORAGE_KEY = "fcn-quote-app.trade-draft.v1";
   const STATIC_IDENTITY_STORAGE_KEY = "fcn-quote-app.static-requester.v1";
   const ROW_CHANGE_DEBOUNCE_MS = 250;
@@ -182,6 +189,14 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     ["kiBarrier", "KI Barrier (%)"], ["observationFrequency", "Observation Frequency (m)"],
     ["otc", "OTC"], ["effectiveDateOffset", "Effective Date Offset (Calendar Days)"], ["tradeDate", "Trade Date"],
   ];
+  // Chinese names shown with the English headers of the entry table only; mail, results and images
+  // keep the issuers' English labels.
+  const zhLabels = {
+    product: "產品別", currency: "貨幣別", tradeDate: "交易日", tenor: "天期（月）",
+    strike: "轉換價%", koType: "提前出場類別", koBarrier: "提前出場價%", coupon: "年化配息率",
+    upfront: "百元報價(手收)", guaranteedPeriods: "保證配息期數", barrierType: "觸及生效類別",
+    kiBarrier: "觸及生效價%",
+  };
   const targetFields = [
     ["strike", "Strike (%)"],
     ["koBarrier", "KO Barrier (%)"],
@@ -443,11 +458,12 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     if (!staticIdentity) queueMicrotask(showStaticIdentityDialog);
   }
 
-  function createRow(copyFirstRow = false) {
-    const firstRow = copyFirstRow ? tableBody.rows[0] : null;
+  // `copyFrom` is true for "copy the first trade" (新增一筆交易) or a row element for 複製此筆.
+  function createRow(copyFrom = false) {
+    const firstRow = copyFrom === true ? tableBody.rows[0] : copyFrom instanceof HTMLTableRowElement ? copyFrom : null;
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td class="row-number"></td>
+      <td class="row-number"><span class="row-number-text"></span><button type="button" class="row-copy" data-copy-row>複製</button></td>
       <td>${select("product", ["FCN", "DAC"], "FCN")}</td>
       <td>${select("currency", ["USD", "JPY", "EUR", "HKD", "CNH", "CAD", "GBP", "AUD", "ZAR"], "USD")}</td>
       <td>${input("tradeDate", `value="${formatDate()}" placeholder="DD-MMM-YY" required`)}</td>
@@ -458,7 +474,7 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
       <td>${select("koType", ["Daily", "Daily Memory", "Period End", "Period End Memory"], "Daily Memory")}</td>
       <td>${input("koBarrier", 'type="number" step="0.01" placeholder="求值留白"')}</td>
       <td>${input("coupon", 'type="number" step="0.01" placeholder="求值留白"')}</td>
-      <td>${input("upfront", 'type="number" step="0.01" value="98" placeholder="求值留白"')}</td>
+      <td>${input("upfront", `type="number" min="${UPFRONT_MIN}" max="${UPFRONT_MAX}" step="0.01" value="98" placeholder="求值留白"`)}</td>
       <td>${input("guaranteedPeriods", 'type="number" min="1" value="1" required')}</td>
       <td>${select("barrierType", ["EKI", "AKI", "NONE"], "NONE")}</td>
       <td>${input("kiBarrier", 'type="number" step="0.01" placeholder="求值留白"')}</td>
@@ -480,7 +496,10 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
   function renumberRows() {
     [...tableBody.rows].forEach((row, index) => {
       row.id = `trade-row-${index + 1}`;
-      row.querySelector(".row-number").textContent = index + 1;
+      row.querySelector(".row-number-text").textContent = index + 1;
+      const copy = row.querySelector("[data-copy-row]");
+      copy.title = `複製第 ${index + 1} 筆交易，加到最後一筆`;
+      copy.setAttribute("aria-label", copy.title);
     });
     document.querySelector("#quoteCount").textContent = tableBody.rows.length;
     renderTradeShortcuts();
@@ -717,7 +736,8 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
       ...fields.filter(([name]) => !underlyingFieldNames.includes(name)),
       ["targetField", "求值欄位"],
     ];
-    decoratedFields.forEach(([name, label]) => {
+    decoratedFields.forEach(([name, englishLabel]) => {
+      const label = zhLabels[name] ? `${zhLabels[name]} ${englishLabel}` : englishLabel;
       const field = rowField(row, name);
       const cell = field.closest("td");
       const fieldLabel = document.createElement("label");
@@ -850,6 +870,9 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     }
     if (get("strike") && (number("strike") < 50 || number("strike") > 100)) {
       markInvalid(row, "strike", "Strike 必須介於 50% 至 100%。");
+    }
+    if (get("upfront") && !(number("upfront") >= UPFRONT_MIN && number("upfront") <= UPFRONT_MAX)) {
+      markInvalid(row, "upfront", `Upfront / NotePrice 必須介於 ${UPFRONT_MIN}% 至 ${UPFRONT_MAX}%。`);
     }
     if (get("barrierType") === "NONE" && get("kiBarrier")) {
       markInvalid(row, "kiBarrier", "Barrier Type 為 NONE 時，KI Barrier 必須留白。");
@@ -1086,7 +1109,7 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
 
   async function loadBbgLookup() {
     try {
-      const response = await fetch("./交易所查詢0715.csv?v=20260921");
+      const response = await fetch("./交易所查詢0715.csv?v=20261125");
       if (!response.ok) throw new Error("CSV 載入失敗");
       const lines = (await response.text()).replace(/^\uFEFF/, "").trim().split(/\r?\n/);
       lines.slice(1).forEach(line => {
@@ -1473,6 +1496,18 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     flushRowChanges();
   }, true);
   tableBody.addEventListener("click", event => {
+    const copyButton = event.target.closest("[data-copy-row]");
+    if (copyButton) {
+      const source = copyButton.closest("tr");
+      if (tableBody.rows.length >= MAX_ROWS) return setStatus(`最多只能新增 ${MAX_ROWS} 筆詢價交易。`);
+      const sourceNumber = [...tableBody.rows].indexOf(source) + 1;
+      createRow(source);
+      setActiveTrade(tableBody.rows.length - 1);
+      saveDraft();
+      setStatus(`已複製第 ${sourceNumber} 筆交易，新增為第 ${tableBody.rows.length} 筆。`, true);
+      tableBody.lastElementChild.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     const addButton = event.target.closest("[data-add-underlying]");
     const removeButton = event.target.closest("[data-remove-underlying]");
     const row = event.target.closest("tr");
@@ -1635,7 +1670,102 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     syncMarket();
   }
 
+  // 整欄套用: a picker in each editable header sets that column of every trade at once. Fixed columns
+  // and the underlyings have none. A price term that is a row's 求值欄位 stays blank in that row,
+  // and KI Barrier is skipped where Barrier Type is NONE. One undo restores the whole table.
+  const CUSTOM_FILL = "__custom__";
+  const COLUMN_FILL_PRESETS = {
+    tradeDate: () => [[formatDate(), `今天 ${formatDate()}`]],
+    tenor: () => [3, 6, 9, 12, 18, 24].map(value => [String(value), `${value} 個月`]),
+    strike: () => [60, 65, 70, 75, 80, 85, 90, 95, 100].map(value => [String(value), `${value}%`]),
+    koBarrier: () => [100, 102, 103, 105].map(value => [String(value), `${value}%`]),
+    coupon: () => [],
+    upfront: () => [97, 97.5, 98, 98.5, 99].map(value => [String(value), `${value}%`]),
+    guaranteedPeriods: () => [1, 2, 3, 6].map(value => [String(value), `${value} 期`]),
+    kiBarrier: () => [50, 55, 60, 65, 70].map(value => [String(value), `${value}%`]),
+  };
+
+  function columnFillOptions(name) {
+    if (COLUMN_FILL_PRESETS[name]) return [...COLUMN_FILL_PRESETS[name](), [CUSTOM_FILL, "自訂…"]];
+    return [...rowField(tableBody.rows[0], name).options]
+      .filter(option => option.value)
+      .map(option => [option.value, option.textContent]);
+  }
+
+  function fillColumn(name, chosen, title) {
+    let value = chosen;
+    if (chosen === CUSTOM_FILL) {
+      const entered = window.prompt(`輸入要套用到每一筆交易的「${title}」：`, "");
+      value = entered === null ? "" : entered.trim();
+      if (!value) return;
+    }
+    const before = snapshotRows();
+    let changed = 0;
+    const skipped = [];
+    [...tableBody.rows].forEach((row, index) => {
+      const field = rowField(row, name);
+      if (name === "targetField") {
+        const option = [...field.options].find(item => item.value === value);
+        if (!option || option.disabled) { skipped.push(index + 1); return; }
+      } else if (rowValue(row, "targetField") === name || field.disabled) {
+        skipped.push(index + 1);
+        return;
+      }
+      if (field.value === value) return;
+      field.value = value;
+      if (name === "barrierType") syncConditionalFields(row);
+      if (name === "barrierType" || name === "targetField") syncTargetField(row);
+      changed += 1;
+    });
+    clearFieldErrors();
+    flushRowChanges();
+    const note = skipped.length ? `；第 ${skipped.join("、")} 筆是求值欄位或不適用，已略過` : "";
+    setStatus(`已將「${title}」套用到 ${changed} 筆交易${note}。`, true);
+    if (changed) {
+      offerUndo(`已整欄套用「${title}」。`, () => {
+        restoreRows(before);
+        setStatus("已復原整欄套用前的交易資料。", true);
+      });
+    }
+  }
+
+  function setupColumnFill() {
+    document.querySelectorAll("#quoteTable thead th[data-column]").forEach(header => {
+      const name = header.dataset.column;
+      const title = header.querySelector(".th-zh")?.textContent || header.textContent.replace("*", "").trim();
+      const picker = document.createElement("select");
+      picker.className = "column-fill";
+      picker.setAttribute("aria-label", `整欄套用：${title}`);
+      picker.title = "選一個值，套用到這一欄的每一筆交易";
+      picker.innerHTML = `<option value="">整欄套用</option>${columnFillOptions(name)
+        .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}`;
+      picker.addEventListener("change", () => {
+        const chosen = picker.value;
+        picker.value = "";
+        if (chosen) fillColumn(name, chosen, title);
+      });
+      header.append(picker);
+    });
+  }
+
+  function renderBackupSites() {
+    const nav = document.querySelector("#backupSites");
+    if (!nav) return;
+    const [url, label] = isStaticSite ? [DYNAMIC_SITE_URL, "動態版（主站）"] : [STATIC_SITE_URL, "靜態版"];
+    const lead = document.createElement("span");
+    lead.textContent = "備援網址：";
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = label;
+    nav.replaceChildren(lead, link);
+    nav.hidden = false;
+  }
+
   if (!restoreDraft()) createRow();
+  setupColumnFill();
+  renderBackupSites();
   setupStaticIdentity();
   scheduleTradeViewportSync();
   offerMailQueueResume();
