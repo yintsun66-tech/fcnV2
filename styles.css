@@ -750,7 +750,9 @@ html { scroll-padding-top: calc(var(--sp-8) + env(safe-area-inset-top, 0px)); }
 #quoteTable th .column-fill { display:block; width:100%; min-width:0; min-height:26px; margin-top:5px; padding:2px 4px; border:0; border-radius:6px; background:#ffffffeb; color:#0b3a44; font-size:var(--text-caption2); font-weight:600; cursor:pointer; }
 #quoteTable .row-copy { margin-left:8px; padding:2px 7px; border:1px solid currentColor; border-radius:var(--r-pill); background:#ffffff26; color:inherit; font-size:var(--text-caption2); font-weight:600; cursor:pointer; }
 #quoteTable .row-copy:hover { background:#ffffff4d; }
-@media (min-width: 1200px) { #quoteTable .row-number-text { display:block; } #quoteTable .row-copy { display:block; margin:5px auto 0; padding:2px 4px; } }
+#quoteTable .row-copy:disabled { opacity:.45; cursor:default; }
+#quoteTable .row-copy:disabled:hover { background:#ffffff26; }
+@media (min-width: 1200px) { #quoteTable .row-number-text { display:block; } #quoteTable .row-copy { display:block; margin:5px auto 0; padding:2px 4px; } #quoteTable .row-delete { margin-top:4px; } }
 .backup-sites { margin-top:8px; color:#ffffffd9; font-size:var(--text-footnote); }
 .backup-sites a { margin-right:12px; color:#fff; font-weight:600; text-decoration:underline; text-underline-offset:2px; }
 .backend-backup-sites { margin:14px 0 0; color:var(--label-2); font-size:var(--text-footnote); }

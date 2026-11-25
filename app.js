@@ -463,7 +463,7 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     const firstRow = copyFrom === true ? tableBody.rows[0] : copyFrom instanceof HTMLTableRowElement ? copyFrom : null;
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td class="row-number"><span class="row-number-text"></span><button type="button" class="row-copy" data-copy-row>複製</button></td>
+      <td class="row-number"><span class="row-number-text"></span><button type="button" class="row-copy" data-copy-row>複製</button><button type="button" class="row-copy row-delete" data-delete-row>刪除</button></td>
       <td>${select("product", ["FCN", "DAC"], "FCN")}</td>
       <td>${select("currency", ["USD", "JPY", "EUR", "HKD", "CNH", "CAD", "GBP", "AUD", "ZAR"], "USD")}</td>
       <td>${input("tradeDate", `value="${formatDate()}" placeholder="DD-MMM-YY" required`)}</td>
@@ -500,6 +500,10 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
       const copy = row.querySelector("[data-copy-row]");
       copy.title = `複製第 ${index + 1} 筆交易，加到最後一筆`;
       copy.setAttribute("aria-label", copy.title);
+      const remove = row.querySelector("[data-delete-row]");
+      remove.title = `刪除第 ${index + 1} 筆交易`;
+      remove.setAttribute("aria-label", remove.title);
+      remove.disabled = tableBody.rows.length <= 1;
     });
     document.querySelector("#quoteCount").textContent = tableBody.rows.length;
     renderTradeShortcuts();
@@ -1508,6 +1512,23 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
       tableBody.lastElementChild.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
+    const deleteButton = event.target.closest("[data-delete-row]");
+    if (deleteButton) {
+      if (tableBody.rows.length <= 1) return setStatus("至少需保留 1 筆詢價交易。");
+      const index = [...tableBody.rows].indexOf(deleteButton.closest("tr"));
+      if (index < 0) return;
+      const before = snapshotRows();
+      tableBody.rows[index].remove();
+      renumberRows();
+      setActiveTrade(Math.min(index, tableBody.rows.length - 1), false);
+      saveDraft();
+      setStatus();
+      offerUndo(`已刪除第 ${index + 1} 筆交易。`, () => {
+        restoreRows(before);
+        setStatus(`已復原第 ${index + 1} 筆交易。`, true);
+      });
+      return;
+    }
     const addButton = event.target.closest("[data-add-underlying]");
     const removeButton = event.target.closest("[data-remove-underlying]");
     const row = event.target.closest("tr");
@@ -1671,8 +1692,10 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
   }
 
   // 整欄套用: a picker in each editable header sets that column of every trade at once. Fixed columns
-  // and the underlyings have none. A price term that is a row's 求值欄位 stays blank in that row,
-  // and KI Barrier is skipped where Barrier Type is NONE. One undo restores the whole table.
+  // have none. A price term that is a row's 求值欄位 stays blank in that row, and KI Barrier is
+  // skipped where Barrier Type is NONE. 連結標的 offers each trade's set of underlyings, read when
+  // the picker opens, plus 自訂… for tickers completed from the exchange table. One undo restores
+  // the whole table.
   const CUSTOM_FILL = "__custom__";
   const COLUMN_FILL_PRESETS = {
     tradeDate: () => [[formatDate(), `今天 ${formatDate()}`]],
@@ -1685,14 +1708,70 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
     kiBarrier: () => [50, 55, 60, 65, 70].map(value => [String(value), `${value}%`]),
   };
 
+  const rowUnderlyings = row => underlyingFieldNames.map(name => rowValue(row, name).trim()).filter(Boolean);
+
+  function underlyingFillOptions() {
+    const seen = new Set();
+    const choices = [];
+    [...tableBody.rows].forEach((row, index) => {
+      const codes = rowUnderlyings(row);
+      const key = codes.join(",");
+      if (!codes.length || seen.has(key)) return;
+      seen.add(key);
+      choices.push([key, `同第 ${index + 1} 筆：${codes.join("、")}`]);
+    });
+    return [...choices, [CUSTOM_FILL, "自訂…"]];
+  }
+
   function columnFillOptions(name) {
+    if (name === "underlyings") return underlyingFillOptions();
     if (COLUMN_FILL_PRESETS[name]) return [...COLUMN_FILL_PRESETS[name](), [CUSTOM_FILL, "自訂…"]];
     return [...rowField(tableBody.rows[0], name).options]
       .filter(option => option.value)
       .map(option => [option.value, option.textContent]);
   }
 
+  // 連結標的 for every trade: the codes of one trade, or tickers typed after 自訂…, each completed
+  // from the exchange table the way a typed underlying is.
+  async function fillUnderlyings(chosen, title) {
+    let codes = chosen === CUSTOM_FILL ? null : chosen.split(",").filter(Boolean);
+    if (!codes) {
+      const entered = window.prompt("輸入要套用到每一筆交易的連結標的，以逗號分隔，例如 NVDA, TSLA（交易所代號會自動補上）：", "");
+      if (entered === null || !entered.trim()) return;
+      await ensureBbgLookup();
+      codes = [];
+      for (const raw of entered.split(/[,，、;；]+/)) {
+        const code = raw.trim().toUpperCase().replace(/\s+/g, " ");
+        if (!code) continue;
+        const completed = bbgLookup.get(code.split(" ")[0]) || code;
+        if (!codes.includes(completed)) codes.push(completed);
+      }
+      if (codes.length > underlyingFieldNames.length) {
+        return setStatus(`連結標的最多 ${underlyingFieldNames.length} 個，這次輸入了 ${codes.length} 個。`);
+      }
+      if (!codes.length) return;
+    }
+    const before = snapshotRows();
+    let changed = 0;
+    [...tableBody.rows].forEach(row => {
+      if (rowUnderlyings(row).join(",") === codes.join(",")) return;
+      underlyingFieldNames.forEach((name, index) => { rowField(row, name).value = codes[index] ?? ""; });
+      syncUnderlyingEditor(row, codes.length);
+      changed += 1;
+    });
+    clearFieldErrors();
+    flushRowChanges();
+    setStatus(`已將「${title}」${codes.join("、")} 套用到 ${changed} 筆交易。`, true);
+    if (!changed) return;
+    document.dispatchEvent(new CustomEvent("fcn:underlying-resolved", { detail: { bbgCode: codes[0] } }));
+    offerUndo(`已整欄套用「${title}」。`, () => {
+      restoreRows(before);
+      setStatus("已復原整欄套用前的交易資料。", true);
+    });
+  }
+
   function fillColumn(name, chosen, title) {
+    if (name === "underlyings") { void fillUnderlyings(chosen, title); return; }
     let value = chosen;
     if (chosen === CUSTOM_FILL) {
       const entered = window.prompt(`輸入要套用到每一筆交易的「${title}」：`, "");
@@ -1737,8 +1816,13 @@ import { loadHtml2Canvas } from "./html2canvas-loader.mjs?v=render-fix-v1";
       picker.className = "column-fill";
       picker.setAttribute("aria-label", `整欄套用：${title}`);
       picker.title = "選一個值，套用到這一欄的每一筆交易";
-      picker.innerHTML = `<option value="">整欄套用</option>${columnFillOptions(name)
-        .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}`;
+      const fillPickerOptions = () => {
+        picker.innerHTML = `<option value="">整欄套用</option>${columnFillOptions(name)
+          .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}`;
+      };
+      fillPickerOptions();
+      // The underlyings change as trades are typed, so their choices are read when the picker opens.
+      if (name === "underlyings") ["focus", "mousedown"].forEach(type => picker.addEventListener(type, fillPickerOptions));
       picker.addEventListener("change", () => {
         const chosen = picker.value;
         picker.value = "";
