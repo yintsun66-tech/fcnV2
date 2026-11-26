@@ -91,6 +91,8 @@ export const EMAIL_INSTITUTIONS = Object.freeze({
     subject: "UBS[詢價]FCBKTPE: FCN(T+7)",
     columns: [
       productColumn("Product", "FCN", "WRA"), sourceColumn("Guaranteed Periods (m)", "guaranteedPeriods"), sourceColumn("Currency", "currency"), sourceColumn("BBG Code 1", "bbgCode1"), sourceColumn("BBG Code 2", "bbgCode2"), sourceColumn("BBG Code 3", "bbgCode3"), sourceColumn("BBG Code 4", "bbgCode4"), sourceColumn("BBG Code 5", "bbgCode5"), sourceColumn("Strike (%)", "strike"), sourceColumn("KO Type", "koType"), sourceColumn("KO Barrier (%)", "koBarrier"), sourceColumn("Coupon p.a. (%)", "coupon"), sourceColumn("Upfront / NotePrice (%)", "upfront"), sourceColumn("Tenor (m)", "tenor"), sourceColumn("Barrier Type", "barrierType"), sourceColumn("KI Barrier (%)", "kiBarrier"), sourceColumn("Observation Frequency (m)", "observationFrequency"), sourceColumn("OTC", "otc"), blankColumn("Funding Spread (bps)"), blankColumn("Effective Date Offset"),
+      // The trade date as Strike Date, written like CITI's (04-Dec-26); added at the user's request, 2026-11-26.
+      strikeDateColumn("dd-MMM-yy"),
     ],
   },
   DBS: {

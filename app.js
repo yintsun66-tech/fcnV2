@@ -3,7 +3,7 @@ import {
   branchSubjectLabel,
   buildInstitutionEmail as buildSharedInstitutionEmail,
   buildStaticRequesterSubject,
-} from "./backend/shared/email-formats.js?v=static-requester-v1";
+} from "./backend/shared/email-formats.js?v=ubs-strike-date-v1";
 import {
   HOTLIST_CONSENT_KEY,
   hotlistDescriptor,
